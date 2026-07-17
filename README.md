@@ -86,7 +86,7 @@ _To be updated as modeling progresses._
 
 ```bash
 # Clone the repo
-git clone https://github.com/YOUR_USERNAME/malaria-risk-nigeria.git
+git clone https://github.com/Ghentlesteve/malaria-risk-nigeria.git
 cd malaria-risk-nigeria
 
 # Install dependencies
@@ -119,7 +119,7 @@ _To be updated after modeling._
 ## Author
 
 **Kwenev Stephen** — Data Analyst & Health Information Systems Specialist  
-[LinkedIn](https://linkedin.com/in/stephen-kwenev-85315b278) | [GitHub](https://github.com/YOUR_USERNAME)
+[LinkedIn](https://linkedin.com/in/stephen-kwenev-85315b278) |  [GitHub](https://github.com/Ghentlesteve)
 
 ---
 
