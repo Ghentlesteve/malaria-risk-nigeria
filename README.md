@@ -1,131 +1,110 @@
-# Nigeria State-Level Malaria Risk Stratification
+# Nigeria Climate-Informed Malaria Analysis and Forecasting
 
-## Overview
+A research and decision-support prototype inspired by the DHIS2 Climate Tools training held in Kaduna State. The project will investigate local rainfall–malaria relationships and test whether climate information improves forecasts of monthly reported confirmed malaria cases one and two months ahead.
 
-This project builds a machine learning pipeline to classify malaria risk at the state level across Nigeria, using DHS/MIS survey indicators combined with climate variables (rainfall and vegetation index). The goal is to produce an operational risk stratification tool that supports national malaria program planning and resource allocation.
+The intended users are national and state malaria programme teams reviewing preparedness and potential demand for diagnostic tests and treatments. The extraction scope is **all 36 states and the FCT, by LGA and month**. Nasarawa was an initial extraction test, not a selected pilot. Any smaller modeling pilot remains undecided.
 
-A secondary module flags states with low reporting reliability, providing a data-confidence layer on top of the risk predictions — drawing on established data quality assessment (DQA) frameworks used in DHIS2-based health information systems.
+## Questions
 
-**Live demo:** _[link added after deployment]_
+1. Are wetter periods followed by increases in reported malaria cases, after what delay, and in which locations?
+2. Does climate information improve predictions beyond seasonality and previous case counts?
+3. How do incomplete or delayed reports affect interpretation?
 
----
+These are research questions. No local rainfall effect, forecasting accuracy or operational alert threshold has been established yet. Observational associations alone do not establish causation.
 
-## Problem Statement
+## Current status
 
-Nigeria bears one of the world's highest malaria burdens. National malaria programs must prioritize limited resources — bed nets, indoor spraying, treatment stockpiles — across 36 states and the FCT. Doing this well requires knowing not just current prevalence, but which states are likely to remain high-risk or transition into high-risk zones, and whether the data supporting those estimates is reliable.
+- Existing work: DHS/MIS ingestion, exploratory analysis, figures and a processed state-by-survey-year dataset.
+- New foundation: monthly case-data specification, a CSV template, validator and reproducible DHIS2 export ingestion with provenance and coverage reports.
+- Available locally: yearly routine case exports for 2020–2025, combined into a monthly table with blanks preserved. Run the preparation command below to regenerate the audit.
+- Pending: NHMIS 2019 dataset reporting measures, geography/boundary verification, climate ingestion, relationship analysis, model evaluation, dashboard and deployment.
+- The feature, model and reliability modules and Streamlit entry point are placeholders. There is no working dashboard or trained forecasting model yet.
 
-This project addresses both questions:
-1. **What is the predicted malaria risk class for each state?** (Low / Medium / High)
-2. **How confident should we be in that prediction, given reporting data quality?**
+The DHS/MIS work remains historical context on prevalence and interventions. Its survey risk categories are not outbreak alerts. Survey estimates will not be interpolated into monthly cases or assigned to LGAs as observed outcomes.
 
----
+## Stages and deliverables
 
-## Data Sources
+| Stage | Deliverable | Status |
+| --- | --- | --- |
+| 1. Scope | Nationwide LGA analysis, user decision and data requirements | Nationwide extraction agreed; smaller modeling pilot undecided |
+| 2. Data readiness | Validated monthly cases, reporting metadata, geography and climate data | Case ingestion and initial audit completed; remaining inputs pending |
+| 3. Relationship analysis | Rainfall/case charts, lag analysis and geographical comparisons | Planned |
+| 4. Forecasting | Seasonal baseline, case-history model and climate-informed model, evaluated over time | Planned |
+| 5. Dashboard | Trends, forecasts, uncertainty and reporting-quality flags | Planned |
+| 6. AI assistant | Cited document search and explanations using computed analytical results | Later phase |
+| 7. Deployment and integration | Hosted pilot, monitoring, CI/CD and evaluation of Chap/DHIS2 integration | Later phase |
 
-| Source | Description | Granularity |
-|--------|-------------|-------------|
-| [DHS Program / HDX](https://data.humdata.org/dataset/dhs-subnational-data-for-nigeria) | Nigeria subnational malaria indicators (ITN coverage, RDT/microscopy prevalence, ANC indicators) | State × Survey year (2003–2024) |
-| [CHIRPS](https://www.chc.ucsb.edu/data/chirps) | Monthly rainfall estimates | State-level spatial aggregation |
-| [MODIS NDVI](https://modis.gsfc.nasa.gov/data/dataprod/mod13.php) | Vegetation index (proxy for mosquito habitat) | State-level spatial aggregation |
+See [APPROACH.md](APPROACH.md) for the design and evaluation rules, and [docs/monthly_case_data.md](docs/monthly_case_data.md) for the first input specification.
 
----
+The available DHIS2 Climate App is the first climate-data acquisition route. See [docs/climate_data.md](docs/climate_data.md) for source choices, geometry requirements and the alternative Python workflow. See [CONTRIBUTING.md](CONTRIBUTING.md) for commits, tests and what stays local when the repository is public.
 
-## Methodology
+## Data plan
 
-1. **Data ingestion & cleaning** — pivot DHS indicators from long to wide format, handle missing survey years, merge climate variables
-2. **Feature engineering** — ITN coverage rates, ANC intervention indicators, lagged rainfall, NDVI anomalies, population-weighted averages
-3. **Target construction** — malaria prevalence (RDT) binned into risk classes: Low (<10%), Medium (10–30%), High (>30%)
-4. **Modeling** — Random Forest classifier with temporal train/test split (train on earlier survey years, test on later ones)
-5. **Explainability** — SHAP values to identify which features drive risk classification per state
-6. **Reporting reliability module** — secondary model flagging states with historically low reporting completeness or high indicator inconsistency
+| Source | Role | Resolution |
+| --- | --- | --- |
+| Authorised aggregate NHMIS/DHIS2 export | Confirmed cases and observed reporting quality | Monthly, LGA where available |
+| Rainfall and temperature data | Climate exposures, seasonality and lagged features | Monthly, matching health geography |
+| Organisation-unit metadata and boundaries | Stable geographical joins and spatial aggregation | Matching export geography |
+| DHS/MIS indicators | Historical prevalence and intervention context | State by survey year |
 
----
+Case counts are the initial forecasting target. Incidence needs a suitable population denominator. Missing reports remain missing; an absent reporting-quality measure means unknown quality. Aggregate exports are sufficient; patient records are not required.
 
-## Project Structure
+## Run the available data checks
 
-```
-malaria-risk-nigeria/
-│
-├── data/
-│   ├── raw/                  # Source data files (not committed to git)
-│   └── processed/            # Cleaned, merged datasets (regenerated by notebooks)
-│
-├── notebooks/
-│   ├── 01_data_ingestion.ipynb
-│   ├── 02_eda.ipynb
-│   ├── 03_feature_engineering.ipynb
-│   ├── 04_modeling.ipynb
-│   └── 05_reporting_reliability.ipynb
-│
-├── src/
-│   ├── data_utils.py         # Data loading and cleaning functions
-│   ├── features.py           # Feature engineering functions
-│   ├── model.py              # Model training and evaluation
-│   └── reliability.py        # Reporting reliability module
-│
-├── app/
-│   └── streamlit_app.py      # Interactive risk dashboard
-│
-├── models/                   # Saved model artifacts (not committed)
-├── reports/
-│   └── figures/              # Charts and maps exported from notebooks
-│
-├── requirements.txt
-└── README.md
-```
-
----
-
-## Results
-
-_To be updated as modeling progresses._
-
----
-
-## How to Run
+From the repository root, with Python 3.10 or later:
 
 ```bash
-# Clone the repo
-git clone https://github.com/Ghentlesteve/malaria-risk-nigeria.git
-cd malaria-risk-nigeria
+# Prepare the supplied yearly DHIS2 exports (2020–2025).
+python -m src.ingest_dhis2
 
-# Install dependencies
-pip install -r requirements.txt
+# Checks use the Python standard library; no package installation required.
+python -m src.data_utils path/to/monthly_cases.csv
 
-# Run notebooks in order (01 → 05)
-jupyter notebook
+# Optionally save a summary (this location is ignored by Git).
+python -m src.data_utils path/to/monthly_cases.csv --report data/processed/monthly_cases_validation.json
 
-# Launch the Streamlit app
-streamlit run app/streamlit_app.py
+# Run validator tests.
+python -m unittest discover -s tests -v
 ```
 
----
+The preparation command reads `data/raw/malaria_confirmed_lga_monthly_YYYY.csv` and writes derived files to `data/processed/routine/`: a monthly case table, source-cell lineage, source fingerprints and schema results, yearly/state coverage, absent unit-years and a readable readiness report. Raw files are unchanged. Original names and hierarchy prefixes are retained. Reporting measures stay blank until supplied. The importer accepts the observed wide monthly export layouts, checks all twelve month headings against the filename year, and accepts decimal-formatted whole counts without rounding. Unsupported layouts or ambiguous identities fail for review.
 
-## Key Findings
+For manually prepared inputs, `templates/monthly_cases.csv` documents the validator's expected format. It is deliberately header-only and fails the empty-data check.
 
-_To be updated after modeling._
+The validator reports schema errors, invalid values, duplicate unit-month records, internal missing months and missing reporting measures. It does not modify input, fill gaps, establish epidemiological validity or certify readiness to forecast. Coverage checks cannot detect LGAs absent from the whole file or missing periods outside each unit's observed range without an expected roster and date window.
 
----
+For the existing survey analysis, install `requirements.txt` in an isolated environment and use notebooks 01 and 02. Those requirements are the original analysis environment, not a completed deployment specification. No automated NHMIS connection or cloud deployment is configured.
 
-## Limitations
+## Structure
 
-- DHS/MIS surveys are conducted every 4–5 years; this model uses cross-sectional data across survey waves, not continuous surveillance
-- State-level granularity reflects DHS sampling design (not powered at LGA level)
-- Climate variables are spatially aggregated to state boundaries; within-state heterogeneity is not captured
-- Reporting reliability features in the secondary module are partially synthetic, modeled on DHIS2 DQA frameworks
-
----
+```text
+data/raw/                  Local source files, ignored by Git
+data/processed/            Local processed data and validation summaries, ignored by Git
+templates/monthly_cases.csv
+docs/monthly_case_data.md
+src/data_utils.py          Monthly CSV validation and CLI
+src/ingest_dhis2.py        Yearly export reshaping, source lineage and coverage audit
+src/features.py            Placeholder
+src/model.py               Placeholder
+src/reliability.py         Placeholder
+tests/                     Data-validation tests
+notebooks/01_*.ipynb        Existing survey ingestion
+notebooks/02_*.ipynb        Existing survey EDA
+notebooks/03_*.ipynb        Placeholder for later work (also notebooks 04 and 05)
+app/streamlit_app.py        Placeholder
+reports/figures/            Existing survey figures
+APPROACH.md                Proposed research and product design
+```
 
 ## Author
 
-**Kwenev Stephen** — Data Analyst & Health Information Systems Specialist  
-[LinkedIn](https://linkedin.com/in/stephen-kwenev-85315b278) |  [GitHub](https://github.com/Ghentlesteve)
+**Kwenev Stephen** — Data Analyst & Health Information Systems Specialist
 
----
+[LinkedIn](https://linkedin.com/in/stephen-kwenev-85315b278) · [GitHub](https://github.com/Ghentlesteve)
 
-## References
+## Reference materials
 
-- DHS Program: https://dhsprogram.com
-- HDX Nigeria Subnational Health Data: https://data.humdata.org/dataset/dhs-subnational-data-for-nigeria
-- CHIRPS Rainfall Data: https://www.chc.ucsb.edu/data/chirps
-- Methodology reference: _Integrating DHS/MIS Biomarkers with 34 Years of CHIRPS-NDVI Climate Data for Malaria Risk Prediction in Nigeria_ (medRxiv, 2025)
+- Local DHIS2 Climate Tools training slides (original venue text retained in the slides; training held in Kaduna).
+- [DHIS2 Climate Tools](https://climate-tools.dhis2.org/)
+- [Chap modeling documentation](https://chap.dhis2.org/)
+- [DHS/HDX Nigeria subnational data](https://data.humdata.org/dataset/dhs-subnational-data-for-nigeria)

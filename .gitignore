@@ -25,3 +25,11 @@ venv/
 # OS
 .DS_Store
 Thumbs.db
+
+# Local editor/session files and personal document outputs
+.virtual_documents/
+anaconda_projects/
+outputs/
+
+# Local workshop reference; publish only with permission to redistribute
+DHIS2_Climate_Tools_Presentation.pptx
