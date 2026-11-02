@@ -1,0 +1,8 @@
+# Separate environment from the original survey-analysis requirements.
+rasterio>=1.4,<2
+shapely>=2.1,<3
+pyproj>=3.6,<4
+requests>=2.32,<3
+cdsapi>=0.7.7,<1
+xarray>=2024.1
+netCDF4>=1.7,<2

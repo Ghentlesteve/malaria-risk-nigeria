@@ -36,7 +36,7 @@ The DHS/MIS work remains historical context on prevalence and interventions. Its
 
 See [APPROACH.md](APPROACH.md) for the design and evaluation rules, and [docs/monthly_case_data.md](docs/monthly_case_data.md) for the first input specification.
 
-The available DHIS2 Climate App is the first climate-data acquisition route. See [docs/climate_data.md](docs/climate_data.md) for source choices, geometry requirements and the alternative Python workflow. See [CONTRIBUTING.md](CONTRIBUTING.md) for commits, tests and what stays local when the repository is public.
+The selected climate-data route is Python download and LGA polygon aggregation. CHIRPS v3 rainfall acquisition and an ID/geometry audit are implemented; a January 2025 raster sample is available locally. Aggregation of real LGAs awaits boundaries; ERA5-Land temperature acquisition awaits Copernicus setup and implementation. See [docs/climate_data.md](docs/climate_data.md) for commands, source versions and how to obtain polygons from DHIS2. See [CONTRIBUTING.md](CONTRIBUTING.md) for commits, tests and what stays local when the repository is public.
 
 ## Data plan
 
@@ -84,6 +84,7 @@ templates/monthly_cases.csv
 docs/monthly_case_data.md
 src/data_utils.py          Monthly CSV validation and CLI
 src/ingest_dhis2.py        Yearly export reshaping, source lineage and coverage audit
+src/climate_data.py        CHIRPS download, polygon audit and area-weighted rainfall extraction
 src/features.py            Placeholder
 src/model.py               Placeholder
 src/reliability.py         Placeholder
