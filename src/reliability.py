@@ -14,7 +14,10 @@ METRICS = {
 
 
 def prepare(source, cases_path, output):
-    data = pd.read_csv(source, dtype={"Organisation unit": str, "Period": str})
+    sources = [source] if isinstance(source, (str, Path)) else source
+    data = pd.concat([
+        pd.read_csv(path, dtype={"Organisation unit": str, "Period": str}) for path in sources
+    ], ignore_index=True)
     if set(data["Data"].unique()) != set(METRICS):
         raise ValueError("Expected all three NHMIS 2019 reporting measures.")
     data["period"] = pd.to_datetime(data["Period"], format="%Y%m", errors="raise").dt.strftime("%Y-%m")
@@ -45,8 +48,11 @@ def prepare(source, cases_path, output):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--input", type=Path, default=Path("data/raw/nhmis_2019_reporting_monthly_2025.csv"))
+    parser.add_argument("--input", type=Path, nargs="+",
+                        default=sorted(Path("data/raw").glob("nhmis_2019_reporting_monthly_*.csv")))
     parser.add_argument("--cases", type=Path, default=Path("data/processed/routine/monthly_cases.csv"))
     parser.add_argument("--output", type=Path, default=Path("data/processed/routine/nhmis_reporting_monthly.csv"))
     args = parser.parse_args()
+    if not args.input:
+        parser.error("No NHMIS reporting exports found. Supply one or more files with --input.")
     prepare(args.input, args.cases, args.output)

@@ -19,7 +19,8 @@ The exploratory analysis and retrospective backtest address the first two questi
 - Available locally: yearly routine case exports for 2020–2025, combined into a monthly table with blanks preserved. Run the preparation command below to regenerate the audit.
 - Available locally: matched LGA polygons, CHIRPS rainfall for 2019–2025, the case–rainfall join, exploratory analysis and a rolling 2025 backtest.
 - Available locally: a Streamlit dashboard for LGA trends and retrospective forecast comparisons.
-- Pending: NHMIS 2019 reporting measures, historical availability evidence, temperature, uncertainty estimates and deployment.
+- Available locally: NHMIS 2019 reporting counts and dashboard rates for 2020–2025.
+- Pending: historical availability evidence, temperature, uncertainty estimates and deployment.
 
 The DHS/MIS work remains historical context on prevalence and interventions. Its survey risk categories are not outbreak alerts. Survey estimates will not be interpolated into monthly cases or assigned to LGAs as observed outcomes.
 
@@ -86,7 +87,9 @@ After generating the joined case table and both backtest runs, start the local d
 python -m streamlit run app/streamlit_app.py --server.address 127.0.0.1
 ```
 
-Select a state and LGA to view reported case and rainfall trends. The 2025 backtest tab compares three methods and lets you switch the horizon and input delay. Reporting quality and forecast uncertainty are shown as unavailable while those inputs and estimates are pending.
+Select a state and LGA to view reported case and rainfall trends. The 2025 backtest tab compares three methods and lets you switch the horizon and input delay. Forecast uncertainty estimates are pending.
+
+Run `python -m src.reliability` to combine the local `nhmis_2019_reporting_monthly_YYYY.csv` exports in `data/raw/`. The dashboard displays the resulting counts and rates in **Data quality**. The rates use expected reports as the denominator and stay blank when the counts are incomplete, inconsistent, or have no expected reports.
 
 For the existing survey analysis, install `requirements.txt` in an isolated environment and use notebooks 01 and 02. Those requirements are the original analysis environment, not a completed deployment specification. No automated NHMIS connection or cloud deployment is configured.
 
