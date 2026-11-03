@@ -28,7 +28,7 @@ The DHS/MIS work remains historical context on prevalence and interventions. Its
 | --- | --- | --- |
 | 1. Scope | Nationwide LGA analysis, user decision and data requirements | Nationwide extraction agreed; smaller modeling pilot undecided |
 | 2. Data readiness | Validated monthly cases, reporting metadata, geography and climate data | Case ingestion and initial audit completed; remaining inputs pending |
-| 3. Relationship analysis | Rainfall/case charts, lag analysis and geographical comparisons | Planned |
+| 3. Relationship analysis | Rainfall and case seasonality, lag associations and variation across LGAs | Initial nationwide analysis complete |
 | 4. Forecasting | Seasonal baseline, case-history model and climate-informed model, evaluated over time | Planned |
 | 5. Dashboard | Trends, forecasts, uncertainty and reporting-quality flags | Planned |
 | 6. AI assistant | Cited document search and explanations using computed analytical results | Later phase |
@@ -72,6 +72,8 @@ The preparation command reads `data/raw/malaria_confirmed_lga_monthly_YYYY.csv` 
 For manually prepared inputs, `templates/monthly_cases.csv` documents the validator's expected format. It is deliberately header-only and fails the empty-data check.
 
 The validator reports schema errors, invalid values, duplicate unit-month records, internal missing months and missing reporting measures. It does not modify input, fill gaps, establish epidemiological validity or certify readiness to forecast. Coverage checks cannot detect LGAs absent from the whole file or missing periods outside each unit's observed range without an expected roster and date window.
+
+Run `python -m src.analyze_rainfall` from a Python environment with pandas, NumPy and Matplotlib after generating the case–rainfall table with `python -m src.features`. The analysis writes a seasonal profile, lag associations and a figure under `data/processed/analysis/`. It compares rainfall and log-transformed reported cases at lags of zero to three months. The adjusted comparison subtracts each LGA’s calendar-month mean over the observed years. These retrospective summaries use the full available series and are separate from forecast evaluation.
 
 For the existing survey analysis, install `requirements.txt` in an isolated environment and use notebooks 01 and 02. Those requirements are the original analysis environment, not a completed deployment specification. No automated NHMIS connection or cloud deployment is configured.
 
