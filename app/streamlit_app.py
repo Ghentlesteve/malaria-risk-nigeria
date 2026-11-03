@@ -44,7 +44,6 @@ def main():
     history = cases.loc[cases["org_unit_id"].eq(unit)].sort_values("period").set_index("period")
     history = history.reindex(pd.period_range(history.index.min(), history.index.max(), freq="M").astype(str))
     st.subheader(f"{display_name(units.at[unit, 'org_unit_name'])}, {display_name(state)}")
-    st.info("NHMIS reporting completeness and timeliness are unknown. Gaps in reported cases remain blank.")
 
     trends, backtest = st.tabs(["Case and rainfall trends", "2025 backtest"])
     with trends:
@@ -56,6 +55,9 @@ def main():
         st.markdown("**Monthly rainfall (mm)**")
         st.line_chart(history[["rainfall_mm"]].rename(columns={"rainfall_mm": "Rainfall (mm)"}))
         st.caption(f"Displayed period {history.index.min()} through {history.index.max()}.")
+        with st.expander("Data quality"):
+            st.write("Reporting completeness and timeliness are unavailable for these records. "
+                     "Blank case counts indicate missing values.")
 
     with backtest:
         first, second = st.columns(2)
