@@ -56,8 +56,26 @@ def main():
         st.line_chart(history[["rainfall_mm"]].rename(columns={"rainfall_mm": "Rainfall (mm)"}))
         st.caption(f"Displayed period {history.index.min()} through {history.index.max()}.")
         with st.expander("Data quality"):
-            st.write("Reporting completeness and timeliness are unavailable for these records. "
-                     "Blank case counts indicate missing values.")
+            st.caption("NHMIS Monthly Summary Form (Version 2019). Rates describe completion of the whole form. "
+                       "Blank case counts indicate missing values.")
+            reporting_path = DATA / "routine" / "nhmis_reporting_monthly.csv"
+            if reporting_path.is_file():
+                reporting = table(reporting_path)
+                reporting = reporting.loc[reporting["org_unit_id"].eq(unit)].sort_values("period")
+                if reporting.empty:
+                    st.write("Reporting measures are unavailable for this LGA.")
+                else:
+                    st.caption(f"Reporting data available from {reporting.period.min()} through "
+                               f"{reporting.period.max()}. Both rates use expected reports as the denominator.")
+                    st.dataframe(reporting.drop(columns="org_unit_id").round(1).rename(columns={
+                        "period": "Month", "reports_expected": "Expected", "reports_received": "Completed",
+                        "reports_on_time": "On time", "completeness_pct": "Completeness (%)",
+                        "timeliness_pct": "Timeliness (%)", "status": "Status",
+                    }), hide_index=True)
+                    if reporting["status"].ne("OK").any():
+                        st.caption("Rates are blank for months with missing or inconsistent counts or no expected reports.")
+            else:
+                st.write("Reporting completeness and timeliness are unavailable for these records.")
 
     with backtest:
         first, second = st.columns(2)
