@@ -1,5 +1,8 @@
 """Local dashboard for observed malaria cases and retrospective forecasts."""
 
+import hashlib
+import io
+import json
 from pathlib import Path
 
 import pandas as pd
@@ -30,6 +33,23 @@ def display_name(value):
     return name if separator and len(code) == 2 and code.islower() else value
 
 
+def backtest_tables(folder, delay):
+    try:
+        audit = json.loads((folder / "backtest_audit.json").read_text(encoding="utf-8"))
+        if audit["case_delay_months"] != delay or audit["rainfall_delay_months"] != delay:
+            raise ValueError("Unexpected input delay")
+        tables = []
+        for name in ("backtest_predictions.csv", "backtest_metrics.csv"):
+            content = (folder / name).read_bytes()
+            if hashlib.sha256(content).hexdigest() != audit["output_sha256"][name]:
+                raise ValueError(f"Backtest output does not match the audit: {name}")
+            tables.append(pd.read_csv(io.BytesIO(content), dtype={"org_unit_id": str}))
+        return audit["holdout_year"], *tables
+    except (OSError, ValueError, KeyError) as error:
+        st.error(f"Backtest files are unavailable or inconsistent. Regenerate the selected run. ({error})")
+        st.stop()
+
+
 def main():
     st.set_page_config(page_title="Nigeria Malaria Forecasting", layout="wide")
     st.title("Nigeria Malaria Forecasting")
@@ -45,7 +65,7 @@ def main():
     history = history.reindex(pd.period_range(history.index.min(), history.index.max(), freq="M").astype(str))
     st.subheader(f"{display_name(units.at[unit, 'org_unit_name'])}, {display_name(state)}")
 
-    trends, backtest = st.tabs(["Case and rainfall trends", "2025 backtest"])
+    trends, backtest = st.tabs(["Case and rainfall trends", "Forecast backtest"])
     with trends:
         first, second = st.columns(2)
         first.metric("Months with case counts", int(history["confirmed_cases"].count()))
@@ -84,18 +104,17 @@ def main():
         folder = DATA / "forecast"
         if delay == 2:
             folder = folder / "delay2"
-        predictions = table(folder / "backtest_predictions.csv")
-        scores = table(folder / "backtest_metrics.csv")
+        year, predictions, scores = backtest_tables(folder, delay)
         filtered = predictions.loc[predictions["org_unit_id"].eq(unit)
                                    & predictions["horizon_months"].eq(horizon)]
-        st.caption("Forecasts were evaluated retrospectively on 2025 case counts. The input delays are assumptions. "
+        st.caption(f"Forecasts were evaluated retrospectively on {year} case counts. The input delays are assumptions. "
                    "Prediction intervals have yet to be estimated.")
         if filtered.empty:
             st.info("This LGA has no scored targets for the selected scenario.")
         else:
             plot = (filtered.set_index("period")[["confirmed_cases", *MODELS]]
                     .rename(columns={"confirmed_cases": "Reported cases", **MODELS})
-                    .reindex(pd.period_range("2025-01", "2025-12", freq="M").astype(str)))
+                    .reindex(pd.period_range(f"{year}-01", f"{year}-12", freq="M").astype(str)))
             st.line_chart(plot)
             local_mae = filtered[list(MODELS)].sub(filtered["confirmed_cases"], axis=0).abs().mean()
             local = pd.DataFrame({"Model": local_mae.index.map(MODELS),

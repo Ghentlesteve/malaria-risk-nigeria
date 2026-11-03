@@ -117,17 +117,30 @@ def load_polygons(path):
 
 
 def audit_boundaries(boundaries, cases):
+    from shapely import STRtree
+
     features = load_polygons(boundaries)
     with Path(cases).open(encoding="utf-8-sig", newline="") as handle:
         expected = {row["org_unit_id"] for row in csv.DictReader(handle)}
     if not expected or "" in expected:
         raise ValueError("Cases must contain a nonempty DHIS2 ID roster.")
     actual = {f["id"] for f in features}
+    polygons = [f["geometry"] for f in features]
+    tree = STRtree(polygons)
+    overlaps = []
+    for i, polygon in enumerate(polygons):
+        for j in tree.query(polygon, predicate="intersects"):
+            if j <= i:
+                continue
+            fraction = polygon.intersection(polygons[j]).area / min(polygon.area, polygons[j].area)
+            if fraction > 0.01:
+                overlaps.append({"ids": [features[i]["id"], features[j]["id"]], "fraction": fraction})
     return {"boundary_sha256": digest(boundaries), "case_table_sha256": digest(cases),
             "expected_case_ids": len(expected), "boundary_ids": len(actual),
             "missing_boundary_ids": sorted(expected - actual), "extra_boundary_ids": sorted(actual - expected),
             "exact_roster_match": expected == actual,
-            "geometry_check": "Valid polygons in WGS84; boundary history/topological overlaps not assessed."}
+            "overlaps_above_one_percent": overlaps,
+            "geometry_check": "Valid polygons in WGS84; overlap screen uses planar longitude/latitude area."}
 
 
 def polygon_weights(src, features):
@@ -181,6 +194,8 @@ def aggregate_rainfall(boundaries, cases, start, end, folder, output, minimum_co
     audit = audit_boundaries(boundaries, cases)
     if not audit["exact_roster_match"]:
         raise ValueError("Boundary IDs do not exactly match the case roster; run boundary-audit for details.")
+    if audit["overlaps_above_one_percent"]:
+        raise ValueError("Boundary overlaps exceed 1% of the smaller polygon; run boundary-audit for details.")
     features = load_polygons(boundaries)
     records, sources, weights, grid = [], [], None, None
     for period in periods(start, end):
@@ -245,7 +260,7 @@ def main(argv=None):
         elif args.command == "boundary-audit":
             result = audit_boundaries(args.boundaries, args.cases)
             print(json.dumps(result, indent=2))
-            return 0 if result["exact_roster_match"] else 1
+            return 0 if result["exact_roster_match"] and not result["overlaps_above_one_percent"] else 1
         else:
             print(json.dumps(aggregate_rainfall(args.boundaries, args.cases, args.start, args.end,
                              args.folder, args.output, args.minimum_coverage), indent=2))

@@ -58,6 +58,20 @@ class ClimateSpatialTests(unittest.TestCase):
         self.assertEqual(audit["missing_boundary_ids"], ["002"])
         self.assertEqual(audit["extra_boundary_ids"], ["001"])
 
+    def test_overlap_blocks_aggregation_even_when_ids_match(self):
+        from shapely.geometry import box, mapping
+        from src.climate_data import aggregate_rainfall
+
+        other = {**self.feature, "id": "002", "geometry": mapping(box(1, 0, 3, 1))}
+        self.save([self.feature, other])
+        self.cases.write_text("org_unit_id\n001\n002\n", encoding="utf-8")
+        audit = audit_boundaries(self.boundaries, self.cases)
+        self.assertTrue(audit["exact_roster_match"])
+        self.assertEqual(audit["overlaps_above_one_percent"][0]["ids"], ["001", "002"])
+        with self.assertRaisesRegex(ValueError, "overlaps exceed"):
+            aggregate_rainfall(self.boundaries, self.cases, "2025-01", "2025-01",
+                               self.root, self.root / "rain.csv")
+
     def test_points_empty_invalid_geometry_and_duplicate_ids_fail(self):
         cases = [
             [{**self.feature, "geometry": {"type": "Point", "coordinates": [1, 1]}}],

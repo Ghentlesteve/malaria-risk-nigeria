@@ -88,12 +88,19 @@ def evaluate(case_path, rain_path, output, holdout_year, case_delay, rainfall_de
                             "mae": error.abs().mean(), "mean_bias": error.mean(),
                             "lga_macro_mae": error.abs().groupby(subset["org_unit_id"]).mean().mean()})
     output.mkdir(parents=True, exist_ok=True)
-    predictions.to_csv(output / "backtest_predictions.csv", index=False)
-    pd.DataFrame(metrics).to_csv(output / "backtest_metrics.csv", index=False)
+    output_hashes = {}
+    for name, table in (("backtest_predictions.csv", predictions),
+                        ("backtest_metrics.csv", pd.DataFrame(metrics))):
+        path = output / name
+        partial = path.with_suffix(".csv.part")
+        table.to_csv(partial, index=False)
+        partial.replace(path)
+        output_hashes[name] = digest(path)
     write_json(output / "backtest_audit.json", {
         "holdout_year": holdout_year, "case_delay_months": case_delay,
         "rainfall_delay_months": rainfall_delay, "coverage": coverage,
         "cases_sha256": digest(case_path), "rainfall_sha256": digest(rain_path),
+        "output_sha256": output_hashes,
         "availability": "Retrospective data with assumed delays, not historical snapshots.",
     })
     print(pd.DataFrame(metrics).to_string(index=False))

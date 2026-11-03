@@ -24,7 +24,7 @@ The case exports put LGAs at hierarchy level 3. While logged in through the brow
 
 Keep any instance base path (for example `/dhis`) before `/api`. Replace the application route, not the whole instance address. Save the response as `data/raw/nigeria_lga_boundaries.geojson`. We expect a GeoJSON FeatureCollection with Polygon/MultiPolygon geometries and DHIS2 IDs at each feature's top-level `id`. A point-only export cannot represent LGA area. An empty or access-denied response requires assistance from the instance administrator. This request reads existing geometry and does not change the national instance.
 
-The boundary audit rejects invalid polygons, duplicate or conflicting IDs and non-WGS84 coordinates. It compares IDs against the observed case roster, including missing and extra boundary IDs. It does not certify historical boundary stability or topology across neighbouring LGAs. No name-based automatic matching is performed.
+The boundary audit checks polygon validity, WGS84 coordinates, unique IDs, case roster coverage and overlaps. Historical boundary stability still requires separate evidence.
 
 ## Local Python workflow
 
@@ -37,18 +37,21 @@ python -m venv .venv
 # Test a single downloaded rainfall month before scaling up.
 .venv/Scripts/python.exe -m src.climate_data download-rainfall --start 2025-01 --end 2025-01
 
-# Run after the boundary file is saved.
-.venv/Scripts/python.exe -m src.climate_data boundary-audit --boundaries data/raw/nigeria_lga_boundaries.geojson
+# Save the OCHA ADM2 export as data/raw/nigeria_lga_ocha.geojson alongside the DHIS2 export.
+.venv/Scripts/python.exe -m src.prepare_boundaries
+.venv/Scripts/python.exe -m src.climate_data boundary-audit --boundaries data/processed/climate/nigeria_lga_boundaries_ocha_matched.geojson
 
 # Aggregate the test month only after IDs match.
-.venv/Scripts/python.exe -m src.climate_data aggregate-rainfall --boundaries data/raw/nigeria_lga_boundaries.geojson --start 2025-01 --end 2025-01
+.venv/Scripts/python.exe -m src.climate_data aggregate-rainfall --boundaries data/processed/climate/nigeria_lga_boundaries_ocha_matched.geojson --start 2025-01 --end 2025-01
 
 # Then acquire the full 84-month historical rainfall period (about 400–500 MB).
 .venv/Scripts/python.exe -m src.climate_data download-rainfall --start 2019-01 --end 2025-12
-.venv/Scripts/python.exe -m src.climate_data aggregate-rainfall --boundaries data/raw/nigeria_lga_boundaries.geojson --start 2019-01 --end 2025-12
+.venv/Scripts/python.exe -m src.climate_data aggregate-rainfall --boundaries data/processed/climate/nigeria_lga_boundaries_ocha_matched.geojson --start 2019-01 --end 2025-12 --output data/processed/climate/rainfall_monthly_2019_2025.csv
 
 .venv/Scripts/python.exe -m unittest discover -s tests -v
 ```
+
+Use the [OCHA Nigeria ADM2 export](https://gis.unocha.org/server/rest/services/Hosted/NGA_Administrative_Bounderies/FeatureServer/6/query?where=1%3D1&outFields=*&outSR=4326&f=geojson) for the complete polygon layer. The crosswalk uses normalized names within each state and user-confirmed aliases. Remaining names require a unique unused polygon in the same state with at least 0.40 intersection-over-union against its valid DHIS2 polygon. The generated layer retains DHIS2 IDs, OCHA P-codes and the match method. The overlap screen rejects pairs whose intersection exceeds 1% of the smaller polygon.
 
 The lock file records the tested Windows/Python 3.12 environment. `requirements-climate.txt` gives the direct dependency constraints for intentional environment updates; regenerate and test the lock when updating. These packages are separate from the original survey requirements.
 

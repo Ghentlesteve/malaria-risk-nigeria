@@ -38,7 +38,7 @@ The DHS/MIS work remains historical context on prevalence and interventions. Its
 
 See [APPROACH.md](APPROACH.md) for the design and evaluation rules, and [docs/monthly_case_data.md](docs/monthly_case_data.md) for the first input specification.
 
-The selected climate-data route is Python download and LGA polygon aggregation. CHIRPS v3 rainfall acquisition and an ID/geometry audit are implemented; a January 2025 raster sample is available locally. Aggregation of real LGAs awaits boundaries; ERA5-Land temperature acquisition awaits Copernicus setup and implementation. See [docs/climate_data.md](docs/climate_data.md) for commands, source versions and how to obtain polygons from DHIS2. See [CONTRIBUTING.md](CONTRIBUTING.md) for commits, tests and what stays local when the repository is public.
+The climate pipeline aggregates CHIRPS v3 rainfall for 2019–2025 using the OCHA Nigeria ADM2 layer matched to DHIS2 LGA IDs. ERA5-Land temperature acquisition awaits Copernicus setup and implementation. See [docs/climate_data.md](docs/climate_data.md) for commands and source versions. See [CONTRIBUTING.md](CONTRIBUTING.md) for commits, tests and local data handling.
 
 ## Data plan
 
@@ -87,7 +87,7 @@ After generating the joined case table and both backtest runs, start the local d
 python -m streamlit run app/streamlit_app.py --server.address 127.0.0.1
 ```
 
-Select a state and LGA to view reported case and rainfall trends. The 2025 backtest tab compares three methods and lets you switch the horizon and input delay. Forecast uncertainty estimates are pending.
+Select a state and LGA to view reported case and rainfall trends. The Forecast backtest tab compares three methods and lets you switch the horizon and input delay. The tab reads the year and verifies the prediction and score files against the run audit. Forecast uncertainty estimates are pending.
 
 Run `python -m src.reliability` to combine the local `nhmis_2019_reporting_monthly_YYYY.csv` exports in `data/raw/`. The dashboard displays the resulting counts and rates in **Data quality**. The rates use expected reports as the denominator and stay blank when the counts are incomplete, inconsistent, or have no expected reports.
 
