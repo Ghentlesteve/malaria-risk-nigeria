@@ -8,6 +8,8 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 
+from src.document_search import search_documents
+
 DATA = Path(__file__).resolve().parents[1] / "data" / "processed"
 MODELS = {
     "seasonal_naive": "Same month last year",
@@ -177,6 +179,21 @@ def main():
 
     with assistant:
         guided_answers(history, reporting, local_mae, len(filtered), year, horizon, delay)
+        st.divider()
+        st.subheader("Search project documentation")
+        query = st.text_input("Search terms", placeholder="For example, reporting completeness",
+                              max_chars=200)
+        if query.strip():
+            try:
+                matches = search_documents(DATA.parents[1], query)
+            except OSError:
+                st.error("The project documentation is unavailable.")
+            else:
+                if not matches:
+                    st.info("No matching excerpts. Try terms such as rainfall, reporting, or validation.")
+                for match in matches:
+                    st.markdown(match["excerpt"])
+                    st.caption(f"Source: {match['file']} · {match['section']}")
 
 
 if __name__ == "__main__":
