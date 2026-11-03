@@ -50,10 +50,52 @@ def backtest_tables(folder, delay):
         st.stop()
 
 
+def guided_answers(history, reporting, local_mae, scored_months, year, horizon, delay):
+    st.caption("Answers use the selected LGA and the settings in Forecast backtest.")
+    question = st.selectbox("Choose a question", [
+        "What is the latest reported case count?",
+        "What is the reporting completeness and timeliness?",
+        "Which model had the lowest error for this LGA?",
+    ])
+    if question == "What is the latest reported case count?":
+        observed = history["confirmed_cases"].dropna()
+        if observed.empty:
+            st.write("No case counts are available for this LGA.")
+        else:
+            st.write(f"**{observed.iloc[-1]:,.0f} reported confirmed cases** in {observed.index[-1]}.")
+        st.caption("Source: monthly NHMIS case export, shown in Case and rainfall trends.")
+    elif question == "What is the reporting completeness and timeliness?":
+        if reporting.empty:
+            st.write("No NHMIS reporting records are available for this LGA.")
+        else:
+            periods = reporting["period"].tolist()
+            period = st.selectbox("Reporting month", periods, index=len(periods) - 1)
+            row = reporting.loc[reporting["period"].eq(period)].iloc[0]
+            if row["status"] == "OK":
+                st.write(f"For {period}, completeness was **{row.completeness_pct:.1f}%** and "
+                         f"timeliness was **{row.timeliness_pct:.1f}%**.")
+                st.write(f"{row.reports_received:,.0f} of {row.reports_expected:,.0f} expected reports "
+                         f"were completed, with {row.reports_on_time:,.0f} completed on time.")
+            else:
+                st.write(f"Rates for {period} are unavailable. Status: **{row['status']}**. "
+                         "See the counts in Data quality.")
+        st.caption("Source: NHMIS Monthly Summary Form (Version 2019), shown in Data quality.")
+    else:
+        if not scored_months:
+            st.write("No scored months are available for this LGA under the selected settings.")
+        else:
+            minimum = local_mae.min()
+            best = ", ".join(MODELS[name] for name in local_mae.index[local_mae.eq(minimum)])
+            st.write(f"**{best}** had the lowest mean absolute error, **{minimum:,.1f} cases per month**, "
+                     f"across {scored_months} scored months in {year}.")
+            st.write(f"This backtest uses a {horizon}-month horizon and an assumed {delay}-month input delay.")
+        st.caption("Source: verified retrospective predictions, shown in Forecast backtest.")
+
+
 def main():
     st.set_page_config(page_title="Nigeria Malaria Forecasting", layout="wide")
     st.title("Nigeria Malaria Forecasting")
-    st.caption("Stage 5 prototype · Monthly reported confirmed cases and retrospective forecasts")
+    st.caption("Stage 6 prototype · Monthly reported confirmed cases and retrospective forecasts")
 
     cases = table(DATA / "features" / "case_rainfall_monthly.csv")
     state = st.sidebar.selectbox("State or FCT", sorted(cases["state"].unique()), format_func=display_name)
@@ -65,7 +107,13 @@ def main():
     history = history.reindex(pd.period_range(history.index.min(), history.index.max(), freq="M").astype(str))
     st.subheader(f"{display_name(units.at[unit, 'org_unit_name'])}, {display_name(state)}")
 
-    trends, backtest = st.tabs(["Case and rainfall trends", "Forecast backtest"])
+    reporting_path = DATA / "routine" / "nhmis_reporting_monthly.csv"
+    reporting = pd.DataFrame()
+    if reporting_path.is_file():
+        reporting = table(reporting_path)
+        reporting = reporting.loc[reporting["org_unit_id"].eq(unit)].sort_values("period")
+
+    trends, backtest, assistant = st.tabs(["Case and rainfall trends", "Forecast backtest", "Guided answers"])
     with trends:
         first, second = st.columns(2)
         first.metric("Months with case counts", int(history["confirmed_cases"].count()))
@@ -78,10 +126,7 @@ def main():
         with st.expander("Data quality"):
             st.caption("NHMIS Monthly Summary Form (Version 2019). Rates describe completion of the whole form. "
                        "Blank case counts indicate missing values.")
-            reporting_path = DATA / "routine" / "nhmis_reporting_monthly.csv"
             if reporting_path.is_file():
-                reporting = table(reporting_path)
-                reporting = reporting.loc[reporting["org_unit_id"].eq(unit)].sort_values("period")
                 if reporting.empty:
                     st.write("Reporting measures are unavailable for this LGA.")
                 else:
@@ -107,6 +152,7 @@ def main():
         year, predictions, scores = backtest_tables(folder, delay)
         filtered = predictions.loc[predictions["org_unit_id"].eq(unit)
                                    & predictions["horizon_months"].eq(horizon)]
+        local_mae = filtered[list(MODELS)].sub(filtered["confirmed_cases"], axis=0).abs().mean()
         st.caption(f"Forecasts were evaluated retrospectively on {year} case counts. The input delays are assumptions. "
                    "Prediction intervals have yet to be estimated.")
         if filtered.empty:
@@ -116,7 +162,6 @@ def main():
                     .rename(columns={"confirmed_cases": "Reported cases", **MODELS})
                     .reindex(pd.period_range(f"{year}-01", f"{year}-12", freq="M").astype(str)))
             st.line_chart(plot)
-            local_mae = filtered[list(MODELS)].sub(filtered["confirmed_cases"], axis=0).abs().mean()
             local = pd.DataFrame({"Model": local_mae.index.map(MODELS),
                                   "LGA MAE": local_mae.round(1).to_numpy()})
             st.markdown(f"**LGA errors across {len(filtered)} scored months**")
@@ -129,6 +174,9 @@ def main():
                      hide_index=True)
         st.caption("MAE is the average absolute error in cases per LGA-month. Negative bias means the model "
                    "predicted fewer cases than were reported, on average.")
+
+    with assistant:
+        guided_answers(history, reporting, local_mae, len(filtered), year, horizon, delay)
 
 
 if __name__ == "__main__":
