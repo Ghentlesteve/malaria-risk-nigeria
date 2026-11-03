@@ -59,7 +59,7 @@ Streamlit can support initial exploration. DHIS2 dashboards and Chap are subsequ
 
 ## Current repository status
 
-The repository contains DHS/MIS ingestion/EDA work and local nationwide monthly case exports for 2020–2025. A reproducible importer normalises those exports, preserves source-cell lineage and raw-file fingerprints, validates the combined table and audits coverage. Derived files remain under the Git-ignored data/processed/routine/ directory. Reporting measures for the NHMIS 2019 dataset, geographic boundaries, climate data, extraction timestamps and historical data-availability metadata are pending. Reporting quality is unknown. Feature engineering, forecasting, reporting-quality analysis and the Streamlit entry point remain placeholders; no forecasting pipeline or operational integration has been established.
+The repository contains DHS/MIS ingestion and exploratory analysis, nationwide monthly case exports for 2020–2025, matched LGA boundaries and CHIRPS rainfall. Reproducible scripts validate the inputs, join case and rainfall records, examine seasonality and evaluate one- and two-month forecasts on rolling 2025 targets. Derived files stay under the Git-ignored data/processed directory. Reporting measures, temperature and historical availability metadata are pending. The initial backtest uses assumed availability delays, with a sensitivity run for slower reporting. Operational integration remains planned.
 
 ## Sources
 

@@ -10,15 +10,15 @@ The intended users are national and state malaria programme teams reviewing prep
 2. Does climate information improve predictions beyond seasonality and previous case counts?
 3. How do incomplete or delayed reports affect interpretation?
 
-These are research questions. No local rainfall effect, forecasting accuracy or operational alert threshold has been established yet. Observational associations alone do not establish causation.
+The exploratory analysis and retrospective backtest address the first two questions. Observational associations alone do not establish causation. Operational forecast accuracy and alert thresholds require prospective validation.
 
 ## Current status
 
 - Existing work: DHS/MIS ingestion, exploratory analysis, figures and a processed state-by-survey-year dataset.
 - New foundation: monthly case-data specification, a CSV template, validator and reproducible DHIS2 export ingestion with provenance and coverage reports.
 - Available locally: yearly routine case exports for 2020–2025, combined into a monthly table with blanks preserved. Run the preparation command below to regenerate the audit.
-- Pending: NHMIS 2019 dataset reporting measures, geography/boundary verification, climate ingestion, relationship analysis, model evaluation, dashboard and deployment.
-- The feature, model and reliability modules and Streamlit entry point are placeholders. There is no working dashboard or trained forecasting model yet.
+- Available locally: matched LGA polygons, CHIRPS rainfall for 2019–2025, the case–rainfall join, exploratory analysis and a rolling 2025 backtest.
+- Pending: NHMIS 2019 reporting measures, historical availability evidence, temperature, uncertainty estimates, dashboard and deployment.
 
 The DHS/MIS work remains historical context on prevalence and interventions. Its survey risk categories are not outbreak alerts. Survey estimates will not be interpolated into monthly cases or assigned to LGAs as observed outcomes.
 
@@ -29,7 +29,7 @@ The DHS/MIS work remains historical context on prevalence and interventions. Its
 | 1. Scope | Nationwide LGA analysis, user decision and data requirements | Nationwide extraction agreed; smaller modeling pilot undecided |
 | 2. Data readiness | Validated monthly cases, reporting metadata, geography and climate data | Case ingestion and initial audit completed; remaining inputs pending |
 | 3. Relationship analysis | Rainfall and case seasonality, lag associations and variation across LGAs | Initial nationwide analysis complete |
-| 4. Forecasting | Seasonal baseline, case-history model and climate-informed model, evaluated over time | Planned |
+| 4. Forecasting | Seasonal baseline, case-history model and rainfall-informed model | Initial rolling 2025 backtest complete |
 | 5. Dashboard | Trends, forecasts, uncertainty and reporting-quality flags | Planned |
 | 6. AI assistant | Cited document search and explanations using computed analytical results | Later phase |
 | 7. Deployment and integration | Hosted pilot, monitoring, CI/CD and evaluation of Chap/DHIS2 integration | Later phase |
@@ -74,6 +74,10 @@ For manually prepared inputs, `templates/monthly_cases.csv` documents the valida
 The validator reports schema errors, invalid values, duplicate unit-month records, internal missing months and missing reporting measures. It does not modify input, fill gaps, establish epidemiological validity or certify readiness to forecast. Coverage checks cannot detect LGAs absent from the whole file or missing periods outside each unit's observed range without an expected roster and date window.
 
 Run `python -m src.analyze_rainfall` from a Python environment with pandas, NumPy and Matplotlib after generating the case–rainfall table with `python -m src.features`. The analysis writes a seasonal profile, lag associations and a figure under `data/processed/analysis/`. It compares rainfall and log-transformed reported cases at lags of zero to three months. The adjusted comparison subtracts each LGA’s calendar-month mean over the observed years. These retrospective summaries use the full available series and are separate from forecast evaluation.
+
+Run `python -m src.model` from a Python environment with pandas, NumPy and scikit-learn to regenerate the rolling backtest. Forecasts are issued at month end for one and two months ahead. The default assumes cases and rainfall through the preceding calendar month are available. At each issue date, training includes only outcomes available under that assumption. The seasonal baseline uses the same target month a year earlier. The two models use identical histogram gradient boosting settings, with rainfall added to the second model. Metrics use the same evaluable targets for all three methods. Outputs stay under `data/processed/forecast/`.
+
+To check sensitivity to slower publication, run `python -m src.model --case-delay 2 --rainfall-delay 2 --output data/processed/forecast/delay2`. The delays are assumptions because the retrospective files do not establish what was actually available at each historical forecast date. Case counts represent reported cases and historical revisions may affect results.
 
 For the existing survey analysis, install `requirements.txt` in an isolated environment and use notebooks 01 and 02. Those requirements are the original analysis environment, not a completed deployment specification. No automated NHMIS connection or cloud deployment is configured.
 
