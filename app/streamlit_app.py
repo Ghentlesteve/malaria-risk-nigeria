@@ -345,9 +345,9 @@ def show_nigeria_map(cases, reporting, locations, sidebar_unit, path, demo):
     show_snapshot(history, records, month)
 
 
-def main(*, demo_dir=None):
+def main(*, demo_dir=None, data_dir=DATA):
     demo = demo_dir is not None
-    data_dir = demo_dir if demo else DATA
+    data_dir = demo_dir if demo else data_dir
     st.set_page_config(page_title="Nigeria Malaria Forecasting", layout="wide")
     st.title("Nigeria Malaria Forecasting")
     if demo:

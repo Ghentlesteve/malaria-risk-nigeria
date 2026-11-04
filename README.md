@@ -108,6 +108,12 @@ For [Streamlit Community Cloud](https://docs.streamlit.io/deploy/streamlit-commu
 
 The [Dashboard demo workflow](.github/workflows/dashboard-demo.yml) tests the hosted entry point. It checks that the dashboard renders, the assistant updates when the month changes, and both backtest delay settings load. To run the same check locally, use `python -m unittest discover -s tests -p smoke_demo_dashboard.py -v`.
 
+## Deploy the dashboard with approved figures
+
+Generate the release archive from the approved processed tables with `python -m src.public_dashboard_data`. It writes `outputs/malaria-dashboard-data-2020-2025.zip`. The archive contains the dashboard's monthly case, rainfall, and reporting figures, LGA geometry, and backtest results for both delay settings.
+
+Attach the verified archive to a [GitHub release](https://github.com/Ghentlesteve/malaria-risk-nigeria/releases/new) tagged `dashboard-data-2020-2025-v1`. Then deploy `app/public_app.py` from `main` on [Streamlit Community Cloud](https://share.streamlit.io/) with Python 3.12. The app downloads and verifies the release archive at startup. If the dashboard data changes, update the release tag in `src/public_dashboard_data.py` and the expected SHA-256 in `app/public_app.py`.
+
 ## Ask the dashboard
 
 The dashboard opens on **Overview**. Choose an LGA and a snapshot month to see reported cases, rainfall, and NHMIS reporting rates for the same period. The snapshot starts on the latest month with a reported case count when one is available.
