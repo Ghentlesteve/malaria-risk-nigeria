@@ -97,6 +97,8 @@ For the existing survey analysis, install `requirements.txt` in an isolated envi
 
 The dashboard opens on **Overview**. Choose an LGA and a snapshot month to see reported cases, rainfall, and NHMIS reporting rates for the same period. The snapshot starts on the latest month with a reported case count when one is available.
 
+Open **Case and rainfall trends** to explore reported cases, rainfall, and reporting completeness on a shared timeline. The date range applies to the timeline and the seasonal heatmap. Switch the heatmap between cases and rainfall to compare the same calendar month across years.
+
 Click **Ask assistant** in the lower-right corner of any dashboard tab. Start with **Tell me about this LGA** or choose a topic. Each answer shows its sources and offers related questions. Use **More questions** to browse the topic and **Start over** to clear the conversation.
 
 The sidebar sets the LGA and the Forecast backtest tab sets the backtest settings. Choose a month in the assistant for questions about a specific period. **Compare with another LGA** lets you pick an LGA anywhere in Nigeria and compare both places for the same month. The assistant uses local tables and project definitions. It requires no model setup or training.

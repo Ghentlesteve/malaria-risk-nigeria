@@ -12,6 +12,7 @@ from src.guided_questions import (
     BACKTEST_SOURCE, CASE_SOURCE, EXPLANATIONS, FOLLOW_UPS, QUESTIONS, RAIN_SOURCE, REPORT_SOURCE, TOPICS,
     compare_answer, forecast_answer, latest_snapshot_month, month_label, report_detail, series_answer, snapshot_metrics,
 )
+from src.trend_charts import monthly_chart_data, seasonal_chart, timeline_chart
 
 DATA = Path(__file__).resolve().parents[1] / "data" / "processed"
 MODELS = {
@@ -272,14 +273,24 @@ def main():
     with overview:
         snapshot_month = show_overview(history, reporting)
     with trends:
+        st.subheader("Trends explorer")
+        periods = history.index.tolist()
+        start, end = periods[0], periods[-1]
+        if len(periods) > 1:
+            start, end = st.select_slider("Date range", options=periods, value=(start, end), format_func=month_label)
+        selected_history = history.loc[start:end]
+        data = monthly_chart_data(selected_history, reporting)
         first, second = st.columns(2)
-        first.metric("Months with case counts", int(history["confirmed_cases"].count()))
-        second.metric("Months without a case count in this series", int(history["confirmed_cases"].isna().sum()))
-        st.markdown("**Reported confirmed cases**")
-        st.line_chart(history[["confirmed_cases"]].rename(columns={"confirmed_cases": "Reported cases"}))
-        st.markdown("**Monthly rainfall (mm)**")
-        st.line_chart(history[["rainfall_mm"]].rename(columns={"rainfall_mm": "Rainfall (mm)"}))
-        st.caption(f"Displayed period {history.index.min()} through {history.index.max()}.")
+        first.metric("Months with case counts", int(selected_history["confirmed_cases"].count()))
+        second.metric("Months without a case count", int(selected_history["confirmed_cases"].isna().sum()))
+        st.caption("Hover over any month to see cases, rainfall, and completeness together. Gaps indicate unavailable values.")
+        st.altair_chart(timeline_chart(data), width="stretch")
+        st.subheader("Seasonal heatmap")
+        measure = st.radio("Heatmap measure", ["Reported cases", "Rainfall"], horizontal=True)
+        field = "confirmed_cases" if measure == "Reported cases" else "rainfall_mm"
+        heatmap_height = max(180, 100 + 34 * data["year"].nunique())
+        st.altair_chart(seasonal_chart(data, field), width="stretch", height=heatmap_height)
+        st.caption("Darker cells show higher values. Grey cells indicate missing data. Blank cells fall outside the selected range.")
         with st.expander("Data quality"):
             st.caption("NHMIS Monthly Summary Form. Rates describe completion of the whole form. "
                        "Blank case counts indicate missing values.")
