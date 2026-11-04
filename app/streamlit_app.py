@@ -12,7 +12,7 @@ from src.guided_questions import (
     BACKTEST_SOURCE, CASE_SOURCE, EXPLANATIONS, FOLLOW_UPS, QUESTIONS, RAIN_SOURCE, REPORT_SOURCE, TOPICS,
     compare_answer, forecast_answer, latest_snapshot_month, month_label, report_detail, series_answer, snapshot_metrics,
 )
-from src.trend_charts import monthly_chart_data, seasonal_chart, timeline_chart
+from src.trend_charts import comparison_chart, monthly_chart_data, seasonal_chart, timeline_chart
 
 DATA = Path(__file__).resolve().parents[1] / "data" / "processed"
 MODELS = {
@@ -246,6 +246,34 @@ def show_overview(history, reporting):
     return month
 
 
+def show_comparison(unit, locations, history, reporting, cases, all_reporting):
+    st.subheader("Compare LGA trends")
+    candidates = sorted((key for key in locations if key != unit), key=locations.get)
+    other_unit = st.selectbox("Second LGA", candidates, index=None, placeholder="Choose an LGA and state",
+                              format_func=lambda key: ", ".join(locations[key]))
+    if other_unit is None:
+        st.info("Choose a second LGA to compare with the LGA selected in the sidebar.")
+        return
+
+    other_history = cases.loc[cases["org_unit_id"].eq(other_unit)].set_index("period")
+    other_reporting = all_reporting.loc[all_reporting["org_unit_id"].eq(other_unit)]
+    start = min(history.index.min(), other_history.index.min())
+    end = max(history.index.max(), other_history.index.max())
+    periods = pd.period_range(start, end, freq="M").astype(str).tolist()
+    if len(periods) > 1:
+        start, end = st.select_slider("Comparison date range", options=periods, value=(start, end),
+                                      format_func=month_label)
+    months = pd.period_range(start, end, freq="M").astype(str)
+    first = monthly_chart_data(history.reindex(months), reporting)
+    second = monthly_chart_data(other_history.reindex(months), other_reporting)
+    names = [f"{name.removesuffix(' Local Government Area')}, {state}"
+             for name, state in (locations[unit], locations[other_unit])]
+    st.caption("Hover over a month to see both LGAs’ values. Gaps indicate unavailable data.")
+    st.altair_chart(comparison_chart(first, second, *names), width="stretch")
+    st.caption("Case counts reflect reported confirmed cases. Reporting completeness measures submission of the "
+               "NHMIS Monthly Summary Form.")
+
+
 def main():
     st.set_page_config(page_title="Nigeria Malaria Forecasting", layout="wide")
     st.title("Nigeria Malaria Forecasting")
@@ -270,7 +298,9 @@ def main():
         all_reporting = table(reporting_path)
     reporting = all_reporting.loc[all_reporting["org_unit_id"].eq(unit)].sort_values("period")
 
-    overview, trends, backtest = st.tabs(["Overview", "Case and rainfall trends", "Forecast backtest"])
+    overview, trends, comparison, backtest = st.tabs(
+        ["Overview", "Case and rainfall trends", "LGA comparison", "Forecast backtest"]
+    )
     with overview:
         snapshot_month = show_overview(history, reporting)
     with trends:
@@ -310,6 +340,9 @@ def main():
                         st.caption("Rates are blank for months with missing or inconsistent counts or no expected reports.")
             else:
                 st.write("Reporting completeness and timeliness are unavailable for these records.")
+
+    with comparison:
+        show_comparison(unit, locations, history, reporting, cases, all_reporting)
 
     with backtest:
         first, second = st.columns(2)
