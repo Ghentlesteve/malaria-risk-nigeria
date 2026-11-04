@@ -1,0 +1,21 @@
+name: nigeria_malaria_seasonal_baseline
+
+meta_data:
+  display_name: Nigeria malaria seasonal baseline
+  description: Use the reported case count for the same LGA and month one year earlier.
+
+required_covariates: []
+
+entry_points:
+  train:
+    parameters:
+      train_data: str
+      model: str
+    command: 'python seasonal.py train "{train_data}" "{model}"'
+  predict:
+    parameters:
+      historic_data: str
+      future_data: str
+      model: str
+      out_file: str
+    command: 'python seasonal.py predict "{model}" "{historic_data}" "{future_data}" "{out_file}"'
