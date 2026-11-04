@@ -139,7 +139,7 @@ def floating_assistant(location, unit, locations, cases, reporting, months, snap
         .st-key-assistant-launcher {
             position: fixed;
             right: max(1rem, env(safe-area-inset-right));
-            bottom: max(1rem, env(safe-area-inset-bottom));
+            bottom: calc(5rem + env(safe-area-inset-bottom));
             width: max-content;
             z-index: 100;
         }
@@ -330,7 +330,7 @@ def show_nigeria_map(cases, reporting, locations, sidebar_unit, path, demo):
             st.session_state["map-selected-lga"] = selection[0]["id"]
 
     name, state = locations[selected]
-    st.caption(f"The pink outline shows {name}, {state}. Click an LGA to see its overview below. "
+    st.caption(f"The pink outline and ring show {name}, {state}. Click an LGA to see its overview below. "
                "Grey areas have unavailable values.")
     if not values:
         st.info("This measure has no available values for the selected month.")
