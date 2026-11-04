@@ -33,7 +33,7 @@ The DHS/MIS work remains historical context on prevalence and interventions. Its
 | 3. Relationship analysis | Rainfall and case seasonality, lag associations and variation across LGAs | Initial nationwide analysis complete |
 | 4. Forecasting | Seasonal baseline, case-history model and rainfall-informed model | Initial rolling 2025 backtest complete |
 | 5. Dashboard | Observed trends, retrospective forecasts and reporting-quality status | Local prototype available |
-| 6. AI assistant | Guided answers from verified dashboard data and cited document search | Presets, typed dashboard questions and document excerpts available locally |
+| 6. AI assistant | Answers from verified dashboard data and cited document search | Floating chat available locally |
 | 7. Deployment and integration | Hosted pilot, monitoring, CI/CD and evaluation of Chap/DHIS2 integration | Later phase |
 
 See [APPROACH.md](APPROACH.md) for the design and evaluation rules, and [docs/monthly_case_data.md](docs/monthly_case_data.md) for the first input specification.
@@ -81,7 +81,7 @@ Run `python -m src.model` from a Python environment with pandas, NumPy and sciki
 
 To check sensitivity to slower publication, run `python -m src.model --case-delay 2 --rainfall-delay 2 --output data/processed/forecast/delay2`. The delays are assumptions because the retrospective files do not establish what was actually available at each historical forecast date. Case counts represent reported cases and historical revisions may affect results.
 
-After generating the joined case table and both backtest runs, start the local dashboard from a Python environment with Streamlit and pandas.
+After generating the joined case table and both backtest runs, start the local dashboard from a Python environment with Streamlit 1.52.2 and pandas.
 
 ```powershell
 python -m streamlit run app/streamlit_app.py --server.address 127.0.0.1
@@ -95,7 +95,7 @@ For the existing survey analysis, install `requirements.txt` in an isolated envi
 
 ## Ask the dashboard
 
-In **Guided answers**, choose a preset or type a supported question about the selected LGA. Try “What is the latest reported malaria case count?”, “Reporting completeness for 2025-01”, or “Which model had the lowest error for this LGA?”. Use `YYYY-MM` to ask for case counts or reporting rates in a specific month. The model comparison uses the horizon and delay selected in **Forecast backtest**.
+Click **Ask assistant** in the lower-right corner of either dashboard tab. Try “What is the latest reported malaria case count?”, “Reporting completeness for 2025-01”, or “Which model had the lowest error for this LGA?”. Use `YYYY-MM` to ask for case counts or reporting rates in a specific month. Answers use the LGA and forecast settings selected when you send the question. The chat keeps the last eight exchanges in the current dashboard session.
 
 Dashboard answers use local tables and show their source. Other queries return keyword-matched excerpts from selected sections of the README, methodology, and monthly case-data guide. Open-ended LLM answers are pending.
 

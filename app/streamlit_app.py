@@ -8,7 +8,7 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 
-from src.dashboard_questions import CASE_COUNT, MODEL_ERROR, REPORTING, match_dashboard_question
+from src.dashboard_questions import CASE_COUNT, REPORTING, match_dashboard_question
 from src.document_search import search_documents
 
 DATA = Path(__file__).resolve().parents[1] / "data" / "processed"
@@ -53,46 +53,118 @@ def backtest_tables(folder, delay):
         st.stop()
 
 
-def show_dashboard_answer(question, period, history, reporting, local_mae, scored_months, year, horizon, delay):
+def dashboard_answer(question, period, history, reporting, local_mae, scored_months, year, horizon, delay):
     if question == CASE_COUNT:
         observed = history["confirmed_cases"].dropna()
         if period and period not in observed.index:
-            st.write(f"No case count is available for this LGA in {period}.")
+            reply = f"No case count is available for this LGA in {period}."
         elif observed.empty:
-            st.write("No case counts are available for this LGA.")
+            reply = "No case counts are available for this LGA."
         else:
             month = period or observed.index[-1]
-            st.write(f"**{observed.at[month]:,.0f} reported confirmed cases** in {month}.")
-        st.caption("Source: monthly NHMIS case export, shown in Case and rainfall trends.")
+            reply = f"**{observed.at[month]:,.0f} reported confirmed cases** in {month}."
+        source = "Monthly NHMIS case export · Case and rainfall trends"
     elif question == REPORTING:
         if reporting.empty:
-            st.write("No NHMIS reporting records are available for this LGA.")
+            reply = "No NHMIS reporting records are available for this LGA."
         else:
             month = period or reporting["period"].iloc[-1]
             records = reporting.loc[reporting["period"].eq(month)]
             if records.empty:
-                st.write(f"No NHMIS reporting record is available for this LGA in {month}.")
+                reply = f"No NHMIS reporting record is available for this LGA in {month}."
             else:
                 row = records.iloc[0]
                 if row["status"] == "OK":
-                    st.write(f"For {month}, completeness was **{row.completeness_pct:.1f}%** and "
-                             f"timeliness was **{row.timeliness_pct:.1f}%**.")
-                    st.write(f"{row.reports_received:,.0f} of {row.reports_expected:,.0f} expected reports "
+                    reply = (f"For {month}, completeness was **{row.completeness_pct:.1f}%** and "
+                             f"timeliness was **{row.timeliness_pct:.1f}%**.\n\n"
+                             f"{row.reports_received:,.0f} of {row.reports_expected:,.0f} expected reports "
                              f"were completed, with {row.reports_on_time:,.0f} completed on time.")
                 else:
-                    st.write(f"Rates for {month} are unavailable. Status: **{row['status']}**. "
+                    reply = (f"Rates for {month} are unavailable. Status: **{row['status']}**. "
                              "See the counts in Data quality.")
-        st.caption("Source: NHMIS Monthly Summary Form (Version 2019), shown in Data quality.")
+        source = "NHMIS Monthly Summary Form (Version 2019) · Data quality"
     else:
         if not scored_months:
-            st.write("No scored months are available for this LGA under the selected settings.")
+            reply = "No scored months are available for this LGA under the selected settings."
         else:
             minimum = local_mae.min()
             best = ", ".join(MODELS[name] for name in local_mae.index[local_mae.eq(minimum)])
-            st.write(f"**{best}** had the lowest mean absolute error, **{minimum:,.1f} cases per month**, "
+            reply = (f"**{best}** had the lowest mean absolute error, **{minimum:,.1f} cases per month**, "
                      f"across {scored_months} scored months in {year}.")
-            st.write(f"This backtest uses a {horizon}-month horizon and an assumed {delay}-month input delay.")
-        st.caption("Source: verified retrospective predictions, shown in Forecast backtest.")
+        reply += f"\n\nBacktest settings: {horizon}-month horizon, {delay}-month assumed input delay."
+        source = "Verified retrospective predictions · Forecast backtest"
+    return reply, source
+
+
+def assistant_reply(query, location, answer_data):
+    answer = match_dashboard_question(query)
+    if answer:
+        reply, source = dashboard_answer(*answer, *answer_data)
+        return f"**{location}**\n\n{reply}", [("", source)]
+
+    try:
+        matches = search_documents(DATA.parents[1], query)
+    except OSError:
+        return "The project documentation is unavailable.", []
+    if not matches:
+        return "I couldn’t find a dashboard answer or a matching excerpt. Try one of the example questions.", []
+    return "I found these related excerpts in the project documentation.", [
+        (match["excerpt"], f"{match['file']} · {match['section']}") for match in matches
+    ]
+
+
+def floating_assistant(location, answer_data):
+    st.html("""
+        <style>
+        .st-key-assistant-launcher {
+            position: fixed;
+            right: max(1rem, env(safe-area-inset-right));
+            bottom: max(1rem, env(safe-area-inset-bottom));
+            width: max-content;
+            z-index: 100;
+        }
+        .st-key-assistant-launcher button {
+            min-height: 2.75rem;
+            border-radius: 999px;
+        }
+        .st-key-assistant-panel {
+            width: min(25rem, calc(100vw - 4rem));
+        }
+        .st-key-assistant-transcript {
+            max-height: 42dvh;
+        }
+        </style>
+    """)
+    with st.container(key="assistant-launcher"):
+        with st.popover("Ask assistant", type="primary", icon=":material/chat:"):
+            with st.container(key="assistant-panel"):
+                st.markdown("**Malaria dashboard assistant**")
+                st.caption(f"Current location: {location}")
+                transcript = st.container(key="assistant-transcript", height=280, border=True)
+                query = st.chat_input("Ask about this LGA or the project", key="assistant-question", max_chars=200)
+                exchanges = st.session_state.get("assistant-exchanges", [])
+                if query and query.strip():
+                    query = query.strip()
+                    reply, sources = assistant_reply(query, location, answer_data)
+                    exchanges = [*exchanges[-7:], (query, reply, sources)]
+                    st.session_state["assistant-exchanges"] = exchanges
+
+                with transcript:
+                    if not exchanges:
+                        st.markdown("Try asking:\n\n"
+                                    "- What is the latest reported malaria case count?\n"
+                                    "- Reporting completeness for 2025-01\n"
+                                    "- Which model had the lowest error for this LGA?")
+                        st.caption("Use YYYY-MM for a specific month. You can also ask about the project methods.")
+                    for question, reply, sources in exchanges:
+                        with st.chat_message("user"):
+                            st.text(question, width="stretch")
+                        with st.chat_message("assistant"):
+                            st.markdown(reply)
+                            for excerpt, source in sources:
+                                if excerpt:
+                                    st.markdown(excerpt)
+                                st.caption(f"Source: {source}")
 
 
 def main():
@@ -108,7 +180,8 @@ def main():
                                 format_func=lambda uid: display_name(units.at[uid, "org_unit_name"]))
     history = cases.loc[cases["org_unit_id"].eq(unit)].sort_values("period").set_index("period")
     history = history.reindex(pd.period_range(history.index.min(), history.index.max(), freq="M").astype(str))
-    st.subheader(f"{display_name(units.at[unit, 'org_unit_name'])}, {display_name(state)}")
+    location = f"{display_name(units.at[unit, 'org_unit_name'])}, {display_name(state)}"
+    st.subheader(location)
 
     reporting_path = DATA / "routine" / "nhmis_reporting_monthly.csv"
     reporting = pd.DataFrame()
@@ -116,7 +189,7 @@ def main():
         reporting = table(reporting_path)
         reporting = reporting.loc[reporting["org_unit_id"].eq(unit)].sort_values("period")
 
-    trends, backtest, assistant = st.tabs(["Case and rainfall trends", "Forecast backtest", "Guided answers"])
+    trends, backtest = st.tabs(["Case and rainfall trends", "Forecast backtest"])
     with trends:
         first, second = st.columns(2)
         first.metric("Months with case counts", int(history["confirmed_cases"].count()))
@@ -178,38 +251,7 @@ def main():
         st.caption("MAE is the average absolute error in cases per LGA-month. Negative bias means the model "
                    "predicted fewer cases than were reported, on average.")
 
-    with assistant:
-        st.caption("Answers use the selected LGA and the settings in Forecast backtest.")
-        answer_data = (history, reporting, local_mae, len(filtered), year, horizon, delay)
-        question = st.selectbox("Choose a question", [CASE_COUNT, REPORTING, MODEL_ERROR])
-        period = None
-        if question == REPORTING and not reporting.empty:
-            periods = reporting["period"].tolist()
-            period = st.selectbox("Reporting month", periods, index=len(periods) - 1)
-        show_dashboard_answer(question, period, *answer_data)
-
-        st.divider()
-        st.subheader("Ask about the dashboard or project")
-        st.caption("Try a latest case count, reporting completeness for 2025-01, or the lowest backtest error "
-                   "for this LGA. Use YYYY-MM for a specific month. You can also search project documentation.")
-        query = st.text_input("Your question", placeholder="What is the latest reported malaria case count?",
-                              max_chars=200)
-        if query.strip():
-            answer = match_dashboard_question(query)
-            if answer:
-                show_dashboard_answer(*answer, *answer_data)
-            else:
-                st.caption("No dashboard answer matched. Searching project documentation for related excerpts.")
-                try:
-                    matches = search_documents(DATA.parents[1], query)
-                except OSError:
-                    st.error("The project documentation is unavailable.")
-                else:
-                    if not matches:
-                        st.info("No matching excerpts. Try terms such as rainfall, reporting, or validation.")
-                    for match in matches:
-                        st.markdown(match["excerpt"])
-                        st.caption(f"Source: {match['file']} · {match['section']}")
+    floating_assistant(location, (history, reporting, local_mae, len(filtered), year, horizon, delay))
 
 
 if __name__ == "__main__":

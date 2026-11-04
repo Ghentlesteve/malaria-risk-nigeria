@@ -14,7 +14,7 @@ seaborn==0.13.2
 plotly==5.22.0
 
 # App
-streamlit==1.35.0
+streamlit==1.52.2
 
 # Utilities
 requests==2.32.2
