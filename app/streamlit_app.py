@@ -10,7 +10,9 @@ from string import punctuation
 import pandas as pd
 import streamlit as st
 
-from src.dashboard_questions import CASE_COUNT, REPORTING, match_dashboard_question
+from src.dashboard_questions import (
+    CASE_COUNT, COMPARE_REPORTING, REPORTING, match_dashboard_question, match_named_question, resolve_lga,
+)
 from src.document_answer import answer_from_documents
 from src.document_search import search_documents
 
@@ -21,6 +23,7 @@ MODELS = {
     "case_rainfall": "Case history + rainfall",
 }
 MARKDOWN_ESCAPES = str.maketrans({character: "\\" + character for character in punctuation})
+REPORTING_SOURCE = "NHMIS Monthly Summary Form · Data quality"
 
 
 @st.cache_data
@@ -57,36 +60,36 @@ def backtest_tables(folder, delay):
         st.stop()
 
 
+def reporting_answer(period, reporting):
+    if reporting.empty:
+        return "No NHMIS reporting records are available for this LGA."
+    month = period or reporting["period"].max()
+    records = reporting.loc[reporting["period"].eq(month)]
+    if records.empty:
+        return f"No NHMIS reporting record is available for this LGA in {month}."
+    row = records.iloc[0]
+    if row["status"] != "OK":
+        return f"Rates for {month} are unavailable. Status: **{row['status']}**."
+    return (f"For {month}, completeness was **{row.completeness_pct:.1f}%** and "
+            f"timeliness was **{row.timeliness_pct:.1f}%**.\n\n"
+            f"{row.reports_received:,.0f} of {row.reports_expected:,.0f} expected reports "
+            f"were completed, with {row.reports_on_time:,.0f} completed on time.")
+
+
 def dashboard_answer(question, period, history, reporting, local_mae, scored_months, year, horizon, delay):
     if question == CASE_COUNT:
-        observed = history["confirmed_cases"].dropna()
+        observed = history.set_index("period")["confirmed_cases"].dropna()
         if period and period not in observed.index:
             reply = f"No case count is available for this LGA in {period}."
         elif observed.empty:
             reply = "No case counts are available for this LGA."
         else:
-            month = period or observed.index[-1]
+            month = period or observed.index.max()
             reply = f"**{observed.at[month]:,.0f} reported confirmed cases** in {month}."
         source = "Monthly NHMIS case export · Case and rainfall trends"
     elif question == REPORTING:
-        if reporting.empty:
-            reply = "No NHMIS reporting records are available for this LGA."
-        else:
-            month = period or reporting["period"].iloc[-1]
-            records = reporting.loc[reporting["period"].eq(month)]
-            if records.empty:
-                reply = f"No NHMIS reporting record is available for this LGA in {month}."
-            else:
-                row = records.iloc[0]
-                if row["status"] == "OK":
-                    reply = (f"For {month}, completeness was **{row.completeness_pct:.1f}%** and "
-                             f"timeliness was **{row.timeliness_pct:.1f}%**.\n\n"
-                             f"{row.reports_received:,.0f} of {row.reports_expected:,.0f} expected reports "
-                             f"were completed, with {row.reports_on_time:,.0f} completed on time.")
-                else:
-                    reply = (f"Rates for {month} are unavailable. Status: **{row['status']}**. "
-                             "See the counts in Data quality.")
-        source = "NHMIS Monthly Summary Form · Data quality"
+        reply = reporting_answer(period, reporting)
+        source = REPORTING_SOURCE
     else:
         if not scored_months:
             reply = "No scored months are available for this LGA under the selected settings."
@@ -100,11 +103,36 @@ def dashboard_answer(question, period, history, reporting, local_mae, scored_mon
     return reply, source
 
 
-def assistant_reply(query, location, answer_data):
+def assistant_reply(query, selected_unit, locations, cases, reporting, backtest_data):
     answer = match_dashboard_question(query)
+    units = [selected_unit]
+    named = match_named_question(query) if not answer else None
+    if named:
+        question, period, names = named
+        answer = question, period
+        roster = [(uid, unit_name, state) for uid, (unit_name, state) in locations.items()]
+        try:
+            units = [resolve_lga(name, roster) for name in names]
+        except ValueError as error:
+            return str(error).translate(MARKDOWN_ESCAPES), []
     if answer:
-        reply, source = dashboard_answer(*answer, *answer_data)
-        return f"**{location}**\n\n{reply}", [("", source)]
+        question, period = answer
+        if question == COMPARE_REPORTING:
+            if units[0] == units[1]:
+                return "Choose two different LGAs to compare their reporting rates.", []
+            first, second = [reporting.loc[reporting["org_unit_id"].eq(unit)] for unit in units]
+            if not period:
+                period = max(set(first["period"]) & set(second["period"]), default=None)
+                if not period:
+                    return "These LGAs have no shared NHMIS reporting month.", [("", REPORTING_SOURCE)]
+            parts = [f"**NHMIS reporting comparison · {period}**"]
+            for unit, records in zip(units, (first, second)):
+                parts.append(f"**{', '.join(locations[unit])}**\n\n{reporting_answer(period, records)}")
+            return "\n\n".join(parts), [("", REPORTING_SOURCE)]
+        unit = units[0]
+        reply, source = dashboard_answer(question, period, cases.loc[cases["org_unit_id"].eq(unit)],
+                                         reporting.loc[reporting["org_unit_id"].eq(unit)], *backtest_data)
+        return f"**{', '.join(locations[unit])}**\n\n{reply}", [("", source)]
 
     try:
         matches = search_documents(DATA.parents[1], query)
@@ -124,7 +152,7 @@ def assistant_reply(query, location, answer_data):
     ]
 
 
-def floating_assistant(location, answer_data):
+def floating_assistant(location, selected_unit, locations, cases, reporting, backtest_data):
     st.html("""
         <style>
         .st-key-assistant-launcher {
@@ -150,13 +178,13 @@ def floating_assistant(location, answer_data):
         with st.popover("Ask assistant", type="primary", icon=":material/chat:"):
             with st.container(key="assistant-panel"):
                 st.markdown("**Malaria dashboard assistant**")
-                st.caption(f"Current location: {location}")
+                st.caption(f"Sidebar selection: {location}. You can name another LGA in your question.")
                 transcript = st.container(key="assistant-transcript", height=280, border=True)
                 query = st.chat_input("Ask about this LGA or the project", key="assistant-question", max_chars=200)
                 exchanges = st.session_state.get("assistant-exchanges", [])
                 if query and query.strip():
                     query = query.strip()
-                    reply, sources = assistant_reply(query, location, answer_data)
+                    reply, sources = assistant_reply(query, selected_unit, locations, cases, reporting, backtest_data)
                     exchanges = [*exchanges[-7:], (query, reply, sources)]
                     st.session_state["assistant-exchanges"] = exchanges
 
@@ -165,7 +193,8 @@ def floating_assistant(location, answer_data):
                         st.markdown("Try asking:\n\n"
                                     "- What is the latest reported malaria case count?\n"
                                     "- Reporting completeness for 2025-01\n"
-                                    "- Which model had the lowest error for this LGA?")
+                                    "- Which model had the lowest error for this LGA?\n"
+                                    "- Compare reporting rates between Oji River in Enugu and Offa in Kwara")
                         st.caption("Use YYYY-MM for a specific month. You can also ask about the project methods.")
                     for question, reply, sources in exchanges:
                         with st.chat_message("user"):
@@ -184,9 +213,11 @@ def main():
     st.caption("Stage 6 prototype · Monthly reported confirmed cases and retrospective forecasts")
 
     cases = table(DATA / "features" / "case_rainfall_monthly.csv")
+    roster = cases[["org_unit_id", "org_unit_name", "state"]].drop_duplicates("org_unit_id")
+    locations = {uid: (display_name(unit_name), display_name(state))
+                 for uid, unit_name, state in roster.itertuples(index=False, name=None)}
     state = st.sidebar.selectbox("State or FCT", sorted(cases["state"].unique()), format_func=display_name)
-    units = (cases.loc[cases["state"].eq(state), ["org_unit_id", "org_unit_name"]]
-             .drop_duplicates("org_unit_id").sort_values("org_unit_name").set_index("org_unit_id"))
+    units = roster.loc[roster["state"].eq(state)].sort_values("org_unit_name").set_index("org_unit_id")
     unit = st.sidebar.selectbox("LGA", units.index.tolist(),
                                 format_func=lambda uid: display_name(units.at[uid, "org_unit_name"]))
     history = cases.loc[cases["org_unit_id"].eq(unit)].sort_values("period").set_index("period")
@@ -195,10 +226,10 @@ def main():
     st.subheader(location)
 
     reporting_path = DATA / "routine" / "nhmis_reporting_monthly.csv"
-    reporting = pd.DataFrame()
+    all_reporting = pd.DataFrame(columns=["org_unit_id", "period"])
     if reporting_path.is_file():
-        reporting = table(reporting_path)
-        reporting = reporting.loc[reporting["org_unit_id"].eq(unit)].sort_values("period")
+        all_reporting = table(reporting_path)
+    reporting = all_reporting.loc[all_reporting["org_unit_id"].eq(unit)].sort_values("period")
 
     trends, backtest = st.tabs(["Case and rainfall trends", "Forecast backtest"])
     with trends:
@@ -262,7 +293,7 @@ def main():
         st.caption("MAE is the average absolute error in cases per LGA-month. Negative bias means the model "
                    "predicted fewer cases than were reported, on average.")
 
-    floating_assistant(location, (history, reporting, local_mae, len(filtered), year, horizon, delay))
+    floating_assistant(location, unit, locations, cases, all_reporting, (local_mae, len(filtered), year, horizon, delay))
 
 
 if __name__ == "__main__":

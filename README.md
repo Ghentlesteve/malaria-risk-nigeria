@@ -95,7 +95,9 @@ For the existing survey analysis, install `requirements.txt` in an isolated envi
 
 ## Ask the dashboard
 
-Click **Ask assistant** in the lower-right corner of either dashboard tab. Try “What is the latest reported malaria case count?”, “Reporting completeness for 2025-01”, or “Which model had the lowest error for this LGA?”. Use `YYYY-MM` to ask for case counts or reporting rates in a specific month. Answers use the LGA and forecast settings selected when you send the question. The chat keeps the last eight exchanges in the current dashboard session.
+Click **Ask assistant** in the lower-right corner of either dashboard tab. Try “What is the latest reported malaria case count?”, “Reporting completeness for 2025-01”, or “Which model had the lowest error for this LGA?”. The sidebar sets the default LGA and the backtest settings.
+
+For case counts and reporting rates, you can name another LGA in your question. Try “Latest case count for Oji River in Enugu” or “Compare reporting rates between Oji River in Enugu and Offa in Kwara”. Add a state when the LGA name is ambiguous. Use `YYYY-MM` to specify a month. Comparisons default to the latest month with a reporting record for both LGAs and flag unavailable rates. The chat keeps the last eight exchanges in the current dashboard session.
 
 Dashboard answers use local tables and show their source. Other queries return keyword-matched excerpts from selected sections of the README, methodology, and monthly case-data guide.
 
