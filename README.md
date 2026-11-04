@@ -33,7 +33,7 @@ The DHS/MIS work remains historical context on prevalence and interventions. Its
 | 3. Relationship analysis | Rainfall and case seasonality, lag associations and variation across LGAs | Initial nationwide analysis complete |
 | 4. Forecasting | Seasonal baseline, case-history model and rainfall-informed model | Initial rolling 2025 backtest complete |
 | 5. Dashboard | Observed trends, retrospective forecasts and reporting-quality status | Local prototype available |
-| 6. AI assistant | Guided answers from verified dashboard data and cited document search | Both available locally |
+| 6. AI assistant | Guided answers from verified dashboard data and cited document search | Presets, typed dashboard questions and document excerpts available locally |
 | 7. Deployment and integration | Hosted pilot, monitoring, CI/CD and evaluation of Chap/DHIS2 integration | Later phase |
 
 See [APPROACH.md](APPROACH.md) for the design and evaluation rules, and [docs/monthly_case_data.md](docs/monthly_case_data.md) for the first input specification.
@@ -89,11 +89,15 @@ python -m streamlit run app/streamlit_app.py --server.address 127.0.0.1
 
 Select a state and LGA to view reported case and rainfall trends. The Forecast backtest tab compares three methods and lets you switch the horizon and input delay. The tab reads the year and verifies the prediction and score files against the run audit. Forecast uncertainty estimates are pending.
 
-The Guided answers tab explains the selected LGA's latest reported case count, monthly reporting rates, and backtest errors. It uses the same tables as the dashboard and names the source for each answer. Search project documentation returns keyword-matched excerpts from selected sections of the README, methodology, and monthly case-data guide. Open-ended LLM answers are pending.
-
 Run `python -m src.reliability` to combine the local `nhmis_2019_reporting_monthly_YYYY.csv` exports in `data/raw/`. The dashboard displays the resulting counts and rates in **Data quality**. The rates use expected reports as the denominator and stay blank when the counts are incomplete, inconsistent, or have no expected reports.
 
 For the existing survey analysis, install `requirements.txt` in an isolated environment and use notebooks 01 and 02. Those requirements are the original analysis environment, not a completed deployment specification. No automated NHMIS connection or cloud deployment is configured.
+
+## Ask the dashboard
+
+In **Guided answers**, choose a preset or type a supported question about the selected LGA. Try “What is the latest reported malaria case count?”, “Reporting completeness for 2025-01”, or “Which model had the lowest error for this LGA?”. Use `YYYY-MM` to ask for case counts or reporting rates in a specific month. The model comparison uses the horizon and delay selected in **Forecast backtest**.
+
+Dashboard answers use local tables and show their source. Other queries return keyword-matched excerpts from selected sections of the README, methodology, and monthly case-data guide. Open-ended LLM answers are pending.
 
 ## Structure
 

@@ -8,6 +8,7 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 
+from src.dashboard_questions import CASE_COUNT, MODEL_ERROR, REPORTING, match_dashboard_question
 from src.document_search import search_documents
 
 DATA = Path(__file__).resolve().parents[1] / "data" / "processed"
@@ -52,35 +53,35 @@ def backtest_tables(folder, delay):
         st.stop()
 
 
-def guided_answers(history, reporting, local_mae, scored_months, year, horizon, delay):
-    st.caption("Answers use the selected LGA and the settings in Forecast backtest.")
-    question = st.selectbox("Choose a question", [
-        "What is the latest reported case count?",
-        "What is the reporting completeness and timeliness?",
-        "Which model had the lowest error for this LGA?",
-    ])
-    if question == "What is the latest reported case count?":
+def show_dashboard_answer(question, period, history, reporting, local_mae, scored_months, year, horizon, delay):
+    if question == CASE_COUNT:
         observed = history["confirmed_cases"].dropna()
-        if observed.empty:
+        if period and period not in observed.index:
+            st.write(f"No case count is available for this LGA in {period}.")
+        elif observed.empty:
             st.write("No case counts are available for this LGA.")
         else:
-            st.write(f"**{observed.iloc[-1]:,.0f} reported confirmed cases** in {observed.index[-1]}.")
+            month = period or observed.index[-1]
+            st.write(f"**{observed.at[month]:,.0f} reported confirmed cases** in {month}.")
         st.caption("Source: monthly NHMIS case export, shown in Case and rainfall trends.")
-    elif question == "What is the reporting completeness and timeliness?":
+    elif question == REPORTING:
         if reporting.empty:
             st.write("No NHMIS reporting records are available for this LGA.")
         else:
-            periods = reporting["period"].tolist()
-            period = st.selectbox("Reporting month", periods, index=len(periods) - 1)
-            row = reporting.loc[reporting["period"].eq(period)].iloc[0]
-            if row["status"] == "OK":
-                st.write(f"For {period}, completeness was **{row.completeness_pct:.1f}%** and "
-                         f"timeliness was **{row.timeliness_pct:.1f}%**.")
-                st.write(f"{row.reports_received:,.0f} of {row.reports_expected:,.0f} expected reports "
-                         f"were completed, with {row.reports_on_time:,.0f} completed on time.")
+            month = period or reporting["period"].iloc[-1]
+            records = reporting.loc[reporting["period"].eq(month)]
+            if records.empty:
+                st.write(f"No NHMIS reporting record is available for this LGA in {month}.")
             else:
-                st.write(f"Rates for {period} are unavailable. Status: **{row['status']}**. "
-                         "See the counts in Data quality.")
+                row = records.iloc[0]
+                if row["status"] == "OK":
+                    st.write(f"For {month}, completeness was **{row.completeness_pct:.1f}%** and "
+                             f"timeliness was **{row.timeliness_pct:.1f}%**.")
+                    st.write(f"{row.reports_received:,.0f} of {row.reports_expected:,.0f} expected reports "
+                             f"were completed, with {row.reports_on_time:,.0f} completed on time.")
+                else:
+                    st.write(f"Rates for {month} are unavailable. Status: **{row['status']}**. "
+                             "See the counts in Data quality.")
         st.caption("Source: NHMIS Monthly Summary Form (Version 2019), shown in Data quality.")
     else:
         if not scored_months:
@@ -178,22 +179,37 @@ def main():
                    "predicted fewer cases than were reported, on average.")
 
     with assistant:
-        guided_answers(history, reporting, local_mae, len(filtered), year, horizon, delay)
+        st.caption("Answers use the selected LGA and the settings in Forecast backtest.")
+        answer_data = (history, reporting, local_mae, len(filtered), year, horizon, delay)
+        question = st.selectbox("Choose a question", [CASE_COUNT, REPORTING, MODEL_ERROR])
+        period = None
+        if question == REPORTING and not reporting.empty:
+            periods = reporting["period"].tolist()
+            period = st.selectbox("Reporting month", periods, index=len(periods) - 1)
+        show_dashboard_answer(question, period, *answer_data)
+
         st.divider()
-        st.subheader("Search project documentation")
-        query = st.text_input("Search terms", placeholder="For example, reporting completeness",
+        st.subheader("Ask about the dashboard or project")
+        st.caption("Try a latest case count, reporting completeness for 2025-01, or the lowest backtest error "
+                   "for this LGA. Use YYYY-MM for a specific month. You can also search project documentation.")
+        query = st.text_input("Your question", placeholder="What is the latest reported malaria case count?",
                               max_chars=200)
         if query.strip():
-            try:
-                matches = search_documents(DATA.parents[1], query)
-            except OSError:
-                st.error("The project documentation is unavailable.")
+            answer = match_dashboard_question(query)
+            if answer:
+                show_dashboard_answer(*answer, *answer_data)
             else:
-                if not matches:
-                    st.info("No matching excerpts. Try terms such as rainfall, reporting, or validation.")
-                for match in matches:
-                    st.markdown(match["excerpt"])
-                    st.caption(f"Source: {match['file']} · {match['section']}")
+                st.caption("No dashboard answer matched. Searching project documentation for related excerpts.")
+                try:
+                    matches = search_documents(DATA.parents[1], query)
+                except OSError:
+                    st.error("The project documentation is unavailable.")
+                else:
+                    if not matches:
+                        st.info("No matching excerpts. Try terms such as rainfall, reporting, or validation.")
+                    for match in matches:
+                        st.markdown(match["excerpt"])
+                        st.caption(f"Source: {match['file']} · {match['section']}")
 
 
 if __name__ == "__main__":
