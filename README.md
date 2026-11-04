@@ -101,6 +101,8 @@ Open **Case and rainfall trends** to explore reported cases, rainfall, and repor
 
 In **LGA comparison**, the sidebar sets the first LGA. Choose a second LGA and a date range to compare reported cases, rainfall, and reporting completeness on shared scales. Hover over a month to see both values for that measure.
 
+In **Nigeria map**, choose a month and measure to see values across LGAs. Click a boundary to see that LGA’s Overview below the map for the selected month. The map uses the matched OCHA boundaries produced by the boundary preparation step in [the climate guide](docs/climate_data.md).
+
 Click **Ask assistant** in the lower-right corner of any dashboard tab. Start with **Tell me about this LGA** or choose a topic. Each answer shows its sources and offers related questions. Use **More questions** to browse the topic and **Start over** to clear the conversation.
 
 The sidebar sets the LGA and the Forecast backtest tab sets the backtest settings. Choose a month in the assistant for questions about a specific period. **Compare with another LGA** lets you pick an LGA anywhere in Nigeria and compare both places for the same month. The assistant uses local tables and project definitions. It requires no model setup or training.

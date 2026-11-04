@@ -12,6 +12,7 @@ from src.guided_questions import (
     BACKTEST_SOURCE, CASE_SOURCE, EXPLANATIONS, FOLLOW_UPS, QUESTIONS, RAIN_SOURCE, REPORT_SOURCE, TOPICS,
     compare_answer, forecast_answer, latest_snapshot_month, month_label, report_detail, series_answer, snapshot_metrics,
 )
+from src.nigeria_map import MAP_METRICS, load_map_boundaries, map_values, nigeria_map_chart
 from src.trend_charts import comparison_chart, monthly_chart_data, seasonal_chart, timeline_chart
 
 DATA = Path(__file__).resolve().parents[1] / "data" / "processed"
@@ -25,6 +26,11 @@ MODELS = {
 @st.cache_data
 def read_table(path, modified_ns):
     return pd.read_csv(path, dtype={"org_unit_id": str})
+
+
+@st.cache_data
+def read_map_boundaries(path, modified_ns):
+    return load_map_boundaries(path)
 
 
 def table(path):
@@ -234,14 +240,18 @@ def floating_assistant(location, unit, locations, cases, reporting, months, snap
                             show_reply(exchange)
 
 
+def show_snapshot(history, reporting, month):
+    for column, (label, value) in zip(st.columns(4), snapshot_metrics(history, reporting, month)):
+        column.metric(label, value, border=True)
+    st.caption("Reporting rates describe submission of the NHMIS Monthly Summary Form.")
+
+
 def show_overview(history, reporting):
     latest_month = latest_snapshot_month(history)
     months = sorted(history.index, reverse=True)
     month = st.selectbox("Snapshot month", months, index=months.index(latest_month),
                          format_func=month_label)
-    for column, (label, value) in zip(st.columns(4), snapshot_metrics(history, reporting, month)):
-        column.metric(label, value, border=True)
-    st.caption("Reporting rates describe submission of the NHMIS Monthly Summary Form.")
+    show_snapshot(history, reporting, month)
     st.info("Forecast backtest shows how models performed on historical data. Live forecasts are planned.")
     return month
 
@@ -274,6 +284,45 @@ def show_comparison(unit, locations, history, reporting, cases, all_reporting):
                "NHMIS Monthly Summary Form.")
 
 
+@st.fragment
+def show_nigeria_map(cases, reporting, locations):
+    st.subheader("Nigeria map")
+    path = DATA / "climate" / "nigeria_lga_boundaries_ocha_matched.geojson"
+    if not path.is_file():
+        st.info("The map needs the matched LGA boundaries. Run the boundary preparation step in the project guide.")
+        return
+    try:
+        boundaries = read_map_boundaries(path, path.stat().st_mtime_ns)
+        if boundaries.keys() != locations.keys():
+            raise ValueError("Boundary IDs differ from the dashboard LGA list.")
+    except (OSError, ValueError, KeyError, TypeError):
+        st.warning("The map boundaries could not be loaded. Rebuild the matched LGA boundaries and try again.")
+        return
+
+    first, second = st.columns(2)
+    month = first.selectbox("Map month", sorted(cases["period"].unique(), reverse=True), format_func=month_label)
+    metric = second.selectbox("Map measure", list(MAP_METRICS))
+    values = map_values(cases, reporting, month, metric)
+    st.caption("Click an LGA to see its Overview below the map. Grey areas have unavailable values.")
+    if not values:
+        st.info("This measure has no available values for the selected month.")
+    selected = st.session_state.get("map-selected-lga")
+    event = st.altair_chart(nigeria_map_chart(boundaries, locations, values, metric, selected), width="stretch",
+                           height=530, key="nigeria-map", on_select="rerun", selection_mode="picked_lga")
+    st.caption("Boundaries · UN OCHA Nigeria ADM2 matched to DHIS2 organisation units.")
+
+    selection = event.selection.get("picked_lga", [])
+    if selection and selection[0].get("id") in locations:
+        selected = selection[0]["id"]
+        st.session_state["map-selected-lga"] = selected
+    if selected in locations:
+        name, state = locations[selected]
+        st.markdown(f"**{name}, {state} · {month_label(month)}**")
+        history = cases.loc[cases["org_unit_id"].eq(selected)].set_index("period")
+        records = reporting.loc[reporting["org_unit_id"].eq(selected)]
+        show_snapshot(history, records, month)
+
+
 def main():
     st.set_page_config(page_title="Nigeria Malaria Forecasting", layout="wide")
     st.title("Nigeria Malaria Forecasting")
@@ -298,8 +347,8 @@ def main():
         all_reporting = table(reporting_path)
     reporting = all_reporting.loc[all_reporting["org_unit_id"].eq(unit)].sort_values("period")
 
-    overview, trends, comparison, backtest = st.tabs(
-        ["Overview", "Case and rainfall trends", "LGA comparison", "Forecast backtest"]
+    overview, trends, comparison, nigeria_map, backtest = st.tabs(
+        ["Overview", "Case and rainfall trends", "LGA comparison", "Nigeria map", "Forecast backtest"]
     )
     with overview:
         snapshot_month = show_overview(history, reporting)
@@ -343,6 +392,9 @@ def main():
 
     with comparison:
         show_comparison(unit, locations, history, reporting, cases, all_reporting)
+
+    with nigeria_map:
+        show_nigeria_map(cases, all_reporting, locations)
 
     with backtest:
         first, second = st.columns(2)
