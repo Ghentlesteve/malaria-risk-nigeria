@@ -11,7 +11,7 @@ import pandas as pd
 import streamlit as st
 
 from src.dashboard_questions import (
-    CASE_COUNT, COMPARE_REPORTING, REPORTING, match_dashboard_question, match_named_question, resolve_lga,
+    CASE_COUNT, COMPARE_REPORTING, LGA_OVERVIEW, REPORTING, match_dashboard_question, match_named_question, resolve_lga,
 )
 from src.document_answer import select_document_evidence
 from src.document_search import search_documents
@@ -122,6 +122,15 @@ def assistant_reply(query, selected_unit, locations, cases, reporting, backtest_
             return str(error).translate(MARKDOWN_ESCAPES), []
     if answer:
         question, period = answer
+        if question == LGA_OVERVIEW:
+            history = cases.loc[cases["org_unit_id"].eq(selected_unit)].set_index("period")
+            records = reporting.loc[reporting["org_unit_id"].eq(selected_unit)]
+            month = period or latest_snapshot_month(history)
+            metrics = snapshot_metrics(history, records, month)
+            lines = "\n".join(f"- {label}: **{value}**" for label, value in metrics)
+            return f"**{', '.join(locations[selected_unit])} · {month_label(month)}**\n\n{lines}", [
+                ("", "Monthly NHMIS case export"), ("", "CHIRPS rainfall"), ("", REPORTING_SOURCE),
+            ]
         if question == COMPARE_REPORTING:
             if units[0] == units[1]:
                 return "Choose two different LGAs to compare their reporting rates.", []
@@ -197,6 +206,7 @@ def floating_assistant(location, selected_unit, locations, cases, reporting, bac
                 with transcript:
                     if not exchanges:
                         st.markdown("Try asking:\n\n"
+                                    "- Tell me about this LGA\n"
                                     "- What is the latest reported malaria case count?\n"
                                     "- Reporting completeness for 2025-01\n"
                                     "- Which model had the lowest error for this LGA?\n"
@@ -213,12 +223,18 @@ def floating_assistant(location, selected_unit, locations, cases, reporting, bac
                                 st.caption(f"Source: {source}")
 
 
-def show_overview(history, reporting):
+def latest_snapshot_month(history):
     observed = history["confirmed_cases"].dropna()
-    latest_month = observed.index[-1] if not observed.empty else history.index[-1]
-    month = st.selectbox("Snapshot month", history.index.tolist(), index=history.index.get_loc(latest_month),
-                         format_func=lambda value: pd.Period(value, freq="M").strftime("%B %Y"))
-    cases, rainfall = history.loc[month, ["confirmed_cases", "rainfall_mm"]]
+    return observed.index.max() if not observed.empty else history.index.max()
+
+
+def month_label(month):
+    return pd.Period(month, freq="M").strftime("%B %Y")
+
+
+def snapshot_metrics(history, reporting, month):
+    cases = history["confirmed_cases"].get(month)
+    rainfall = history["rainfall_mm"].get(month)
     monthly_reporting = reporting.loc[reporting["period"].eq(month)]
     completeness = timeliness = None
     if not monthly_reporting.empty:
@@ -226,14 +242,22 @@ def show_overview(history, reporting):
         if report["status"] == "OK":
             completeness, timeliness = report[["completeness_pct", "timeliness_pct"]]
 
-    for column, (label, value, number_format, suffix) in zip(st.columns(4), (
+    metrics = (
         ("Reported confirmed cases", cases, ",.0f", ""),
         ("Rainfall (mm)", rainfall, ",.1f", ""),
         ("Reporting completeness", completeness, ".1f", "%"),
         ("Reporting timeliness", timeliness, ".1f", "%"),
-    )):
-        display_value = f"{value:{number_format}}{suffix}" if pd.notna(value) else "Unavailable"
-        column.metric(label, display_value, border=True)
+    )
+    return [(label, f"{value:{number_format}}{suffix}" if pd.notna(value) else "Unavailable")
+            for label, value, number_format, suffix in metrics]
+
+
+def show_overview(history, reporting):
+    latest_month = latest_snapshot_month(history)
+    month = st.selectbox("Snapshot month", history.index.tolist(), index=history.index.get_loc(latest_month),
+                         format_func=month_label)
+    for column, (label, value) in zip(st.columns(4), snapshot_metrics(history, reporting, month)):
+        column.metric(label, value, border=True)
     st.caption("Reporting rates describe submission of the NHMIS Monthly Summary Form.")
     st.info("Forecast backtest shows how models performed on historical data. Live forecasts are planned.")
 

@@ -3,16 +3,19 @@
 import re
 
 CASE_COUNT = "What is the latest reported case count?"
+LGA_OVERVIEW = "Tell me about this LGA"
 REPORTING = "What is the reporting completeness and timeliness?"
 COMPARE_REPORTING = "Compare reporting rates"
 MODEL_ERROR = "Which model had the lowest error for this LGA?"
 
-MONTH = r"(?P<month>[0-9]{4}-(?:0[1-9]|1[0-2]))"
+MONTH = r"(?P<month>(?!0000)[0-9]{4}-(?:0[1-9]|1[0-2]))"
 REQUEST = r"(?:(?:what (?:is|was)|show(?: me)?|give me) )?(?:the )?"
 CASE_TERMS = r"(?:reported )?(?:confirmed )?(?:malaria )?case count"
 REPORTING_TERMS = r"(?:nhmis )?reporting (?:completeness and timeliness|completeness|timeliness|rates?)"
 
 PATTERNS = (
+    (LGA_OVERVIEW, rf"(?:tell me about|summari[sz]e|(?:give me an )?overview of) "
+                   rf"(?:this|the selected|the current) (?:lga|local government area)(?: (?:for|in) {MONTH})?"),
     (CASE_COUNT, rf"{REQUEST}(?:latest|most recent) {CASE_TERMS}"),
     (CASE_COUNT, rf"{REQUEST}{CASE_TERMS} (?:for|in) {MONTH}"),
     (CASE_COUNT, rf"how many (?:confirmed )?malaria cases were reported (?:for|in) {MONTH}"),

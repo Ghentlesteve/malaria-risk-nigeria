@@ -1,9 +1,17 @@
 import unittest
 
-from src.dashboard_questions import CASE_COUNT, COMPARE_REPORTING, match_named_question, resolve_lga
+from src.dashboard_questions import (
+    CASE_COUNT, COMPARE_REPORTING, LGA_OVERVIEW, match_dashboard_question, match_named_question, resolve_lga,
+)
 
 
 class NamedDashboardQuestionTests(unittest.TestCase):
+    def test_overview_questions_select_dashboard_data(self):
+        self.assertEqual(match_dashboard_question("Tell me about this LGA"), (LGA_OVERVIEW, None))
+        self.assertEqual(match_dashboard_question("Summarize the selected LGA for 2025-01"),
+                         (LGA_OVERVIEW, "2025-01"))
+        self.assertIsNone(match_dashboard_question("Tell me about the project methodology"))
+
     def test_comparison_uses_two_locations_and_a_shared_month(self):
         self.assertEqual(
             match_named_question("Compare the reporting rate between Oji River LGA in Enugu and Offa in Kwara for 2025-01"),
