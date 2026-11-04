@@ -14,7 +14,7 @@ The new forecasting target is future monthly reported confirmed malaria cases. P
 
 ## First analytical question
 
-Examine whether rainfall changes are followed by changes in reported confirmed malaria cases, at what delay, and whether this varies by LGA and season. Compare the evidence with ordinary seasonal patterns, temperature and reporting changes. These are local empirical questions; matching rainfall and case peaks does not establish causation. Use this analysis to motivate candidate forecasting features, then test their predictive value on held-out periods.
+Examine whether rainfall changes are followed by changes in reported confirmed malaria cases, at what delay, and whether this varies by LGA and season. Compare the evidence with ordinary seasonal patterns, temperature and reporting changes. When rainfall and case counts move together, the association alone cannot show that rainfall caused the change in reported cases. Use this analysis to motivate candidate forecasting features, then test their predictive value on held-out periods.
 
 ## Phased delivery
 
@@ -33,9 +33,13 @@ Examine whether rainfall changes are followed by changes in reported confirmed m
 | Climate | Monthly rainfall total and mean temperature, units, source, spatial aggregation method and data availability date |
 | Optional context | Population estimates, tests performed, intervention coverage and known service or reporting changes |
 
-Aim for several complete seasonal cycles, preferably at least five years where available; this is a planning preference, not a guarantee of sufficient data. Never replace missing case reports with zero. Flag absent reporting metadata as unknown quality.
+Missing case counts stay blank. The project never replaces a missing count with zero. If reporting metadata is absent, reporting quality is unknown.
+
+Aim for several complete seasonal cycles, preferably at least five years where available. The amount of data needed depends on its coverage and quality.
 
 ## Features and validation
+
+The rolling backtest avoids leaking future data into historical forecasts by training only on inputs and outcomes assumed available at each forecast issue date. The main evaluation assumes cases and rainfall are available after one month, with a separate two-month delay run to check sensitivity.
 
 - Use only values available at each forecast issue date, accounting for reporting delays and climate publication delays. Future observed weather must not enter a historical forecast unless explicitly evaluating an unrealistic oracle scenario.
 - Candidate predictors include lagged cases, lagged rainfall and temperature, calendar seasonality and rainfall anomalies. Choose lags through training-period evaluation rather than assuming a fixed local climate relationship.
@@ -47,13 +51,17 @@ Aim for several complete seasonal cycles, preferably at least five years where a
 
 ## Reporting confidence
 
+The dashboard calculates NHMIS reporting completeness as completed reports divided by expected reports, and timeliness as reports completed on time divided by expected reports. Both rates are expressed as percentages and describe submission of the whole form. Rates are unavailable when counts are missing, inconsistent, or have no expected reports.
+
 Replace the planned synthetic reporting-reliability model with transparent checks on observed reporting completeness, timeliness, missing periods, duplicates and abrupt changes. Distinguish reporting quality from predictive uncertainty. Missing DHS RDT measurements indicate survey-data availability, not routine NHMIS reporting reliability.
 
 Show data-quality flags beside forecasts. Do not automatically interpret a fall in reported cases as lower disease risk when reporting deteriorates.
 
 ## Intended product
 
-A prototype dashboard showing observed cases, rainfall anomalies, one- and two-month forecasts with uncertainty where supported, reporting-quality flags, and a ranked review table. Each output should state its geography, forecast issue date, target month and data freshness. Programme users determine the response to an alert; model output alone does not establish procurement quantities.
+The current dashboard shows observed cases and a retrospective 2025 backtest. A live forecast for a future month is unavailable. The project needs current inputs and prospective evaluation before it can provide operational forecasts or alerts.
+
+Planned additions include rainfall anomalies, one- and two-month forecasts with uncertainty where supported, and a ranked review table. Each output should state its geography, forecast issue date, target month and data freshness. Programme users determine the response to an alert. Procurement quantities require additional evidence.
 
 Streamlit can support initial exploration. DHIS2 dashboards and Chap are subsequent integration targets, not existing capabilities of this repository.
 

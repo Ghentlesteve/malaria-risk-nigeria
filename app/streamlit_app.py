@@ -13,7 +13,7 @@ import streamlit as st
 from src.dashboard_questions import (
     CASE_COUNT, COMPARE_REPORTING, REPORTING, match_dashboard_question, match_named_question, resolve_lga,
 )
-from src.document_answer import answer_from_documents
+from src.document_answer import select_document_evidence
 from src.document_search import search_documents
 
 DATA = Path(__file__).resolve().parents[1] / "data" / "processed"
@@ -143,10 +143,10 @@ def assistant_reply(query, selected_unit, locations, cases, reporting, backtest_
     reply = "I found these related excerpts in the project documentation."
     model = os.getenv("MALARIA_ASSISTANT_OLLAMA_MODEL", "").strip()
     if model:
-        generated = answer_from_documents(model, query, matches)
-        if generated:
-            answer, matches = generated
-            reply = f"**Explanation from the local model**\n\n{answer.translate(MARKDOWN_ESCAPES)}"
+        selected = select_document_evidence(model, query, matches)
+        if selected:
+            matches = selected
+            reply = "The local model selected these excerpts from the project documentation."
     return reply, [
         (match["excerpt"], f"{match['file']} · {match['section']}") for match in matches
     ]
@@ -184,7 +184,8 @@ def floating_assistant(location, selected_unit, locations, cases, reporting, bac
                 exchanges = st.session_state.get("assistant-exchanges", [])
                 if query and query.strip():
                     query = query.strip()
-                    reply, sources = assistant_reply(query, selected_unit, locations, cases, reporting, backtest_data)
+                    with st.spinner("Finding an answer…"):
+                        reply, sources = assistant_reply(query, selected_unit, locations, cases, reporting, backtest_data)
                     exchanges = [*exchanges[-7:], (query, reply, sources)]
                     st.session_state["assistant-exchanges"] = exchanges
 
