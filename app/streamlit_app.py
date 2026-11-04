@@ -345,9 +345,9 @@ def show_nigeria_map(cases, reporting, locations, sidebar_unit, path, demo):
     show_snapshot(history, records, month)
 
 
-def main():
-    demo = os.environ.get("MALARIA_DASHBOARD_DEMO") == "1"
-    data_dir = DEMO_ROOT if demo else DATA
+def main(*, demo_dir=None):
+    demo = demo_dir is not None
+    data_dir = demo_dir if demo else DATA
     st.set_page_config(page_title="Nigeria Malaria Forecasting", layout="wide")
     st.title("Nigeria Malaria Forecasting")
     if demo:
@@ -467,4 +467,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    main(demo_dir=DEMO_ROOT if os.environ.get("MALARIA_DASHBOARD_DEMO") == "1" else None)

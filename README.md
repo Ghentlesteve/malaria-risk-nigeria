@@ -95,20 +95,18 @@ For the existing survey analysis, install `requirements.txt` in an isolated envi
 
 ## Run the synthetic dashboard demo
 
-From the repository root, use an isolated Python 3.12 environment and run the following in PowerShell.
+From the repository root, use an isolated Python 3.12 environment.
 
 ```powershell
-python -m pip install -r requirements-dashboard.txt
-python -m src.demo_data
-$env:MALARIA_DASHBOARD_DEMO = "1"
-python -m streamlit run app/streamlit_app.py --server.address 127.0.0.1
+python -m pip install -r app/requirements.txt
+python -m streamlit run app/demo_app.py --server.address 127.0.0.1
 ```
 
-On macOS or Linux, use `export MALARIA_DASHBOARD_DEMO=1` for the environment variable. To return to the regular local dashboard after stopping Streamlit, clear it with `Remove-Item Env:MALARIA_DASHBOARD_DEMO` in PowerShell or `unset MALARIA_DASHBOARD_DEMO` in a POSIX shell.
+The demo entry point generates four fictional LGAs with monthly data for 2024–2025, simple map boundaries, and simulated backtest outputs in a temporary directory when it starts. It displays a synthetic data banner and requires no NHMIS exports, climate downloads, or credentials.
 
-The generator creates four fictional LGAs with monthly data for 2024–2025, simple map boundaries, and simulated backtest outputs. It writes under the Git-ignored `data/processed/demo/` directory. Demo mode reads from that directory and displays a synthetic-data banner. It requires no NHMIS exports, climate downloads, or credentials.
+For [Streamlit Community Cloud](https://docs.streamlit.io/deploy/streamlit-community-cloud/deploy-your-app/deploy), select this GitHub repository, the `main` branch, and `app/demo_app.py` as the main file. Choose Python 3.12 in Advanced settings. The host installs the dependencies from `app/requirements.txt`.
 
-The [Dashboard demo workflow](.github/workflows/dashboard-demo.yml) generates these files and checks that the dashboard renders, the assistant updates when the month changes, and both backtest delay settings load. To run the same check locally after generating the files, use `python -m unittest discover -s tests -p smoke_demo_dashboard.py -v`.
+The [Dashboard demo workflow](.github/workflows/dashboard-demo.yml) tests the hosted entry point. It checks that the dashboard renders, the assistant updates when the month changes, and both backtest delay settings load. To run the same check locally, use `python -m unittest discover -s tests -p smoke_demo_dashboard.py -v`.
 
 ## Ask the dashboard
 

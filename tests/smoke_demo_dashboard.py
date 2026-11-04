@@ -1,16 +1,13 @@
-"""Run with the pinned dashboard dependencies and generated demo data."""
+"""Exercise the hosted entry point with the pinned dashboard dependencies."""
 
-import os
 import unittest
-from unittest.mock import patch
 
 from streamlit.testing.v1 import AppTest
 
 
 class DemoDashboardSmokeTest(unittest.TestCase):
-    @patch.dict(os.environ, {"MALARIA_DASHBOARD_DEMO": "1"})
     def test_demo_loads_and_answers_for_selected_month(self):
-        app = AppTest.from_file("app/streamlit_app.py", default_timeout=30).run()
+        app = AppTest.from_file("app/demo_app.py", default_timeout=30).run()
         self.assertFalse(app.exception)
         self.assertFalse(app.error)
         self.assertIn("Synthetic demo", app.warning[0].value)
