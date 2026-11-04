@@ -161,14 +161,22 @@ def floating_assistant(location, unit, locations, cases, reporting, months, snap
                 topic = state.get("guided-topic")
                 page = state.get("guided-page", 0)
                 followups = state.get("guided-followups", ())
-                exchanges = state.get("guided-exchanges", [])
+                active_question = state.get("guided-active-question")
+                earlier_replies = state.get("guided-earlier-replies", [])
+                is_comparison = active_question is not None and active_question.startswith("compare_")
                 other = None
-                if topic == "compare":
+                if topic == "compare" or is_comparison:
                     candidates = sorted((key for key in locations if key != unit), key=locations.get)
                     other = st.selectbox("Compare with", candidates, index=None,
                                          placeholder="Choose an LGA and state",
                                          format_func=lambda key: ", ".join(locations[key]),
                                          key=f"guided-other-{unit}")
+
+                current_reply = None
+                if active_question and (not is_comparison or other is not None):
+                    reply, sources = guided_reply(active_question, month, unit, other,
+                                                  locations, cases, reporting, backtest_data)
+                    current_reply = (QUESTIONS[active_question], reply, sources)
 
                 def browse(next_topic=None, next_page=0):
                     state["guided-topic"] = next_topic
@@ -179,8 +187,9 @@ def floating_assistant(location, unit, locations, cases, reporting, months, snap
                     if question.startswith("compare_") and other is None:
                         browse("compare")
                         return
-                    reply, sources = guided_reply(question, month, unit, other, locations, cases, reporting, backtest_data)
-                    state["guided-exchanges"] = [*exchanges[-7:], (QUESTIONS[question], reply, sources)]
+                    if current_reply is not None:
+                        state["guided-earlier-replies"] = [*earlier_replies[-6:], current_reply]
+                    state["guided-active-question"] = question
                     group = next((name for name, (_, items) in TOPICS.items()
                                   if any(key == question for key, _ in items)), None)
                     browse(group)
@@ -193,7 +202,8 @@ def floating_assistant(location, unit, locations, cases, reporting, months, snap
 
                 def start_over():
                     browse()
-                    state["guided-exchanges"] = []
+                    state.pop("guided-active-question", None)
+                    state.pop("guided-earlier-replies", None)
 
                 def show_reply(exchange):
                     question, reply, sources = exchange
@@ -202,8 +212,8 @@ def floating_assistant(location, unit, locations, cases, reporting, months, snap
                         st.markdown(reply)
                         st.caption("Sources · " + " · ".join(sources))
 
-                if exchanges:
-                    show_reply(exchanges[-1])
+                if current_reply is not None:
+                    show_reply(current_reply)
 
                 def question_button(key):
                     st.button(QUESTIONS[key], key=f"guided-question-{key}", width="stretch",
@@ -232,11 +242,11 @@ def floating_assistant(location, unit, locations, cases, reporting, months, snap
                         st.button(label, key=f"guided-topic-{key}", width="stretch", on_click=browse, args=(key,))
                 if topic or followups:
                     st.button("All topics", on_click=browse)
-                if exchanges:
+                if active_question:
                     st.button("Start over", on_click=start_over)
-                if len(exchanges) > 1:
+                if earlier_replies:
                     with st.expander("Earlier replies"):
-                        for exchange in reversed(exchanges[:-1]):
+                        for exchange in reversed(earlier_replies):
                             show_reply(exchange)
 
 

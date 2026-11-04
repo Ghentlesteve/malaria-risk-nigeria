@@ -105,7 +105,7 @@ In **Nigeria map**, choose a month and measure to see values across LGAs. Click 
 
 Click **Ask assistant** in the lower-right corner of any dashboard tab. Start with **Tell me about this LGA** or choose a topic. Each answer shows its sources and offers related questions. Use **More questions** to browse the topic and **Start over** to clear the conversation.
 
-The sidebar sets the LGA and the Forecast backtest tab sets the backtest settings. Choose a month in the assistant for questions about a specific period. **Compare with another LGA** lets you pick an LGA anywhere in Nigeria and compare both places for the same month. The assistant uses local tables and project definitions. It requires no model setup or training.
+The sidebar sets the LGA and the Forecast backtest tab sets the backtest settings. Changing **Question month** updates the current answer if it depends on the selected period. **Earlier replies** retain the periods shown when those replies were displayed. **Compare with another LGA** lets you pick an LGA anywhere in Nigeria and compare both places for the same month. The assistant uses local tables and project definitions. It requires no model setup or training.
 
 ## Structure
 
