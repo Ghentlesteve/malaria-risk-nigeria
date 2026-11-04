@@ -34,7 +34,7 @@ The DHS/MIS work remains historical context on prevalence and interventions. Its
 | 4. Forecasting | Seasonal baseline, case-history model and rainfall-informed model | Initial rolling 2025 backtest complete |
 | 5. Dashboard | Observed trends, retrospective forecasts and reporting-quality status | Public dashboard live |
 | 6. Dashboard assistant | Guided questions with answers from dashboard data | Available in the floating panel |
-| 7. Deployment and integration | Hosted pilot, monitoring, CI/CD and evaluation of Chap/DHIS2 integration | Public dashboard and automated startup checks available. Integration pending. |
+| 7. Deployment and integration | Hosted pilot, monitoring, CI/CD and evaluation of Chap/DHIS2 integration | Public dashboard, automated startup checks and a Chap input export available. See the [Chap sandbox guide](docs/chap_sandbox.md). |
 
 See [APPROACH.md](APPROACH.md) for the design and evaluation rules, and [docs/monthly_case_data.md](docs/monthly_case_data.md) for the first input specification.
 
