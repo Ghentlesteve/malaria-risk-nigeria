@@ -23,6 +23,11 @@ MODELS = {
     "case_rainfall": "Case history + rainfall",
 }
 MARKDOWN_ESCAPES = str.maketrans({character: "\\" + character for character in punctuation})
+DOCUMENT_LABELS = {
+    "README.md": "Project guide",
+    "APPROACH.md": "Project methodology",
+    "docs/monthly_case_data.md": "Monthly case data guide",
+}
 REPORTING_SOURCE = "NHMIS Monthly Summary Form · Data quality"
 
 
@@ -148,7 +153,7 @@ def assistant_reply(query, selected_unit, locations, cases, reporting, backtest_
             matches = selected
             reply = "The local model selected these excerpts from the project documentation."
     return reply, [
-        (match["excerpt"], f"{match['file']} · {match['section']}") for match in matches
+        (match["excerpt"], f"{DOCUMENT_LABELS[match['file']]} · {match['section']}") for match in matches
     ]
 
 
