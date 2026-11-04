@@ -82,7 +82,7 @@ def dashboard_answer(question, period, history, reporting, local_mae, scored_mon
                 else:
                     reply = (f"Rates for {month} are unavailable. Status: **{row['status']}**. "
                              "See the counts in Data quality.")
-        source = "NHMIS Monthly Summary Form (Version 2019) · Data quality"
+        source = "NHMIS Monthly Summary Form · Data quality"
     else:
         if not scored_months:
             reply = "No scored months are available for this LGA under the selected settings."
@@ -200,7 +200,7 @@ def main():
         st.line_chart(history[["rainfall_mm"]].rename(columns={"rainfall_mm": "Rainfall (mm)"}))
         st.caption(f"Displayed period {history.index.min()} through {history.index.max()}.")
         with st.expander("Data quality"):
-            st.caption("NHMIS Monthly Summary Form (Version 2019). Rates describe completion of the whole form. "
+            st.caption("NHMIS Monthly Summary Form. Rates describe completion of the whole form. "
                        "Blank case counts indicate missing values.")
             if reporting_path.is_file():
                 if reporting.empty:
