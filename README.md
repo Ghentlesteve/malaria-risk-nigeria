@@ -18,9 +18,9 @@ The exploratory analysis and retrospective backtest address the first two questi
 - New foundation: monthly case-data specification, a CSV template, validator and reproducible DHIS2 export ingestion with provenance and coverage reports.
 - Available locally: yearly routine case exports for 2020–2025, combined into a monthly table with blanks preserved. Run the preparation command below to regenerate the audit.
 - Available locally: matched LGA polygons, CHIRPS rainfall for 2019–2025, the case–rainfall join, exploratory analysis and a rolling 2025 backtest.
-- Available locally: a Streamlit dashboard for LGA trends and retrospective forecast comparisons.
+- The public Streamlit dashboard shows LGA trends, reporting quality and retrospective forecast comparisons. [Open the public dashboard](https://malaria-rain-risk-nigeria.streamlit.app/).
 - Available locally: NHMIS 2019 reporting counts and dashboard rates for 2020–2025.
-- Pending: historical availability evidence, temperature, uncertainty estimates and deployment.
+- Pending: historical availability evidence, temperature, uncertainty estimates and Chap/DHIS2 integration.
 
 The DHS/MIS work remains historical context on prevalence and interventions. Its survey risk categories are not outbreak alerts. Survey estimates will not be interpolated into monthly cases or assigned to LGAs as observed outcomes.
 
@@ -32,9 +32,9 @@ The DHS/MIS work remains historical context on prevalence and interventions. Its
 | 2. Data readiness | Validated monthly cases, reporting metadata, geography and climate data | Case ingestion and initial audit completed; remaining inputs pending |
 | 3. Relationship analysis | Rainfall and case seasonality, lag associations and variation across LGAs | Initial nationwide analysis complete |
 | 4. Forecasting | Seasonal baseline, case-history model and rainfall-informed model | Initial rolling 2025 backtest complete |
-| 5. Dashboard | Observed trends, retrospective forecasts and reporting-quality status | Local prototype available |
+| 5. Dashboard | Observed trends, retrospective forecasts and reporting-quality status | Public dashboard live |
 | 6. Dashboard assistant | Guided questions with answers from dashboard data | Available in the floating panel |
-| 7. Deployment and integration | Hosted pilot, monitoring, CI/CD and evaluation of Chap/DHIS2 integration | Synthetic demo and CI workflow available. Hosting pending. |
+| 7. Deployment and integration | Hosted pilot, monitoring, CI/CD and evaluation of Chap/DHIS2 integration | Public dashboard and automated startup checks available. Integration pending. |
 
 See [APPROACH.md](APPROACH.md) for the design and evaluation rules, and [docs/monthly_case_data.md](docs/monthly_case_data.md) for the first input specification.
 
@@ -106,13 +106,15 @@ The demo entry point generates four fictional LGAs with monthly data for 2024–
 
 For [Streamlit Community Cloud](https://docs.streamlit.io/deploy/streamlit-community-cloud/deploy-your-app/deploy), select this GitHub repository, the `main` branch, and `app/demo_app.py` as the main file. Choose Python 3.12 in Advanced settings. The host installs the dependencies from `app/requirements.txt`.
 
-The [Dashboard demo workflow](.github/workflows/dashboard-demo.yml) tests the hosted entry point. It checks that the dashboard renders, the assistant updates when the month changes, and both backtest delay settings load. To run the same check locally, use `python -m unittest discover -s tests -p smoke_demo_dashboard.py -v`.
+The [Dashboard checks workflow](.github/workflows/dashboard-demo.yml) tests both entry points. The synthetic check covers the dashboard, assistant month changes and both backtest delay settings. To run it locally, use `python -m unittest discover -s tests -p smoke_demo_dashboard.py -v`.
 
 ## Deploy the dashboard with approved figures
 
 Generate the release archive from the approved processed tables with `python -m src.public_dashboard_data`. It writes `outputs/malaria-dashboard-data-2020-2025.zip`. The archive contains the dashboard's monthly case, rainfall, and reporting figures, LGA geometry, and backtest results for both delay settings.
 
 Attach the verified archive to a [GitHub release](https://github.com/Ghentlesteve/malaria-risk-nigeria/releases/new) tagged `dashboard-data-2020-2025-v1`. Then deploy `app/public_app.py` from `main` on [Streamlit Community Cloud](https://share.streamlit.io/) with Python 3.12. The app downloads and verifies the release archive at startup. If the dashboard data changes, update the release tag in `src/public_dashboard_data.py` and the expected SHA-256 in `app/public_app.py`.
+
+The public startup check uses the published ZIP and verifies that the app loads the map, case counts and both backtest delay settings. Run it locally with `python -m unittest discover -s tests -p smoke_public_dashboard.py -v`.
 
 ## Ask the dashboard
 
