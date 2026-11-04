@@ -50,6 +50,23 @@ def map_values(cases, reporting, month, metric):
     return rows.set_index("org_unit_id")[field].dropna().to_dict()
 
 
+def locator_point(geometry):
+    polygons = [geometry["coordinates"]] if geometry["type"] == "Polygon" else geometry["coordinates"]
+    polygon = max(polygons, key=lambda rings: abs(sum(
+        a[0] * b[1] - b[0] * a[1] for a, b in zip(rings[0], rings[0][1:])
+    )))
+    latitudes = [point[1] for point in polygon[0]]
+    latitude = (min(latitudes) + max(latitudes)) / 2
+    # Pair crossings through the polygon and its holes, then use the widest interior interval.
+    crossings = sorted(
+        a[0] + (b[0] - a[0]) * (latitude - a[1]) / (b[1] - a[1])
+        for ring in polygon for a, b in zip(ring, ring[1:])
+        if (a[1] > latitude) != (b[1] > latitude)
+    )
+    west, east = max(zip(crossings[::2], crossings[1::2]), key=lambda pair: pair[1] - pair[0])
+    return [(west + east) / 2, latitude]
+
+
 def nigeria_map_chart(boundaries, locations, values, metric, selected=None):
     field, spec, suffix, scheme = MAP_METRICS[metric]
     features = []
@@ -64,6 +81,11 @@ def nigeria_map_chart(boundaries, locations, values, metric, selected=None):
     is_selected = f"datum.id === {json.dumps(selected)}"
     # Draw the selected outline last so adjacent polygons cannot cover it.
     features.sort(key=lambda feature: feature["id"] == selected)
+    if selected in boundaries:
+        features.append({
+            **features[-1],
+            "geometry": {"type": "Point", "coordinates": locator_point(boundaries[selected])},
+        })
     scale = alt.Scale(scheme=scheme, domain=[0, 100]) if field == "completeness_pct" else alt.Scale(scheme=scheme, zero=True)
     color = alt.Color("properties.value:Q", title=metric, scale=scale,
                       legend=alt.Legend(orient="bottom"))
@@ -74,6 +96,7 @@ def nigeria_map_chart(boundaries, locations, values, metric, selected=None):
             .mark_geoshape(invalid=None, cursor="pointer")
             .encode(
                 color=alt.condition("isValid(datum.properties.value)", color, alt.value("#9099a5")),
+                fillOpacity=alt.condition("datum.geometry.type === 'Point'", alt.value(0), alt.value(1)),
                 stroke=alt.condition(is_selected, alt.value("#d81b60"), alt.value("#f1f4f8")),
                 strokeWidth=alt.condition(is_selected, alt.value(3), alt.value(0.45)),
                 tooltip=[alt.Tooltip("properties.lga:N", title="LGA"),
