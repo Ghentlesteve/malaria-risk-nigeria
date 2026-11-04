@@ -34,7 +34,7 @@ The DHS/MIS work remains historical context on prevalence and interventions. Its
 | 4. Forecasting | Seasonal baseline, case-history model and rainfall-informed model | Initial rolling 2025 backtest complete |
 | 5. Dashboard | Observed trends, retrospective forecasts and reporting-quality status | Local prototype available |
 | 6. Dashboard assistant | Guided questions with answers from dashboard data | Available in the floating panel |
-| 7. Deployment and integration | Hosted pilot, monitoring, CI/CD and evaluation of Chap/DHIS2 integration | Later phase |
+| 7. Deployment and integration | Hosted pilot, monitoring, CI/CD and evaluation of Chap/DHIS2 integration | Synthetic demo and CI workflow available. Hosting pending. |
 
 See [APPROACH.md](APPROACH.md) for the design and evaluation rules, and [docs/monthly_case_data.md](docs/monthly_case_data.md) for the first input specification.
 
@@ -92,6 +92,23 @@ Select a state and LGA to view reported case and rainfall trends. The Forecast b
 Run `python -m src.reliability` to combine the local `nhmis_2019_reporting_monthly_YYYY.csv` exports in `data/raw/`. The dashboard displays the resulting counts and rates in **Data quality**. The rates use expected reports as the denominator and stay blank when the counts are incomplete, inconsistent, or have no expected reports.
 
 For the existing survey analysis, install `requirements.txt` in an isolated environment and use notebooks 01 and 02. Those requirements are the original analysis environment, not a completed deployment specification. No automated NHMIS connection or cloud deployment is configured.
+
+## Run the synthetic dashboard demo
+
+From the repository root, use an isolated Python 3.12 environment and run the following in PowerShell.
+
+```powershell
+python -m pip install -r requirements-dashboard.txt
+python -m src.demo_data
+$env:MALARIA_DASHBOARD_DEMO = "1"
+python -m streamlit run app/streamlit_app.py --server.address 127.0.0.1
+```
+
+On macOS or Linux, use `export MALARIA_DASHBOARD_DEMO=1` for the environment variable. To return to the regular local dashboard after stopping Streamlit, clear it with `Remove-Item Env:MALARIA_DASHBOARD_DEMO` in PowerShell or `unset MALARIA_DASHBOARD_DEMO` in a POSIX shell.
+
+The generator creates four fictional LGAs with monthly data for 2024–2025, simple map boundaries, and simulated backtest outputs. It writes under the Git-ignored `data/processed/demo/` directory. Demo mode reads from that directory and displays a synthetic-data banner. It requires no NHMIS exports, climate downloads, or credentials.
+
+The [Dashboard demo workflow](.github/workflows/dashboard-demo.yml) generates these files and checks that the dashboard renders, the assistant updates when the month changes, and both backtest delay settings load. To run the same check locally after generating the files, use `python -m unittest discover -s tests -p smoke_demo_dashboard.py -v`.
 
 ## Ask the dashboard
 

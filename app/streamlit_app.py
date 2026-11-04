@@ -3,11 +3,13 @@
 import hashlib
 import io
 import json
+import os
 from pathlib import Path
 
 import pandas as pd
 import streamlit as st
 
+from src.demo_data import DEMO_ROOT
 from src.guided_questions import (
     BACKTEST_SOURCE, CASE_SOURCE, EXPLANATIONS, FOLLOW_UPS, QUESTIONS, RAIN_SOURCE, REPORT_SOURCE, TOPICS,
     compare_answer, forecast_answer, latest_snapshot_month, month_label, report_detail, series_answer, snapshot_metrics,
@@ -131,7 +133,7 @@ def guided_reply(question, month, unit, other, locations, cases, reporting, back
     return f"{title}\n\n{reply}", sources
 
 
-def floating_assistant(location, unit, locations, cases, reporting, months, snapshot_month, backtest_data):
+def floating_assistant(location, unit, locations, cases, reporting, months, snapshot_month, backtest_data, demo):
     st.html("""
         <style>
         .st-key-assistant-launcher {
@@ -155,6 +157,8 @@ def floating_assistant(location, unit, locations, cases, reporting, months, snap
             with st.container(key="assistant-panel"):
                 st.markdown("**Malaria dashboard assistant**")
                 st.caption(location)
+                if demo:
+                    st.caption("Demo figures are synthetic. Source explanations describe the research dashboard.")
                 month = st.selectbox("Question month", months, index=months.index(snapshot_month),
                                      format_func=month_label, key=f"guided-month-{unit}")
                 state = st.session_state
@@ -210,7 +214,8 @@ def floating_assistant(location, unit, locations, cases, reporting, months, snap
                     with st.chat_message("assistant"):
                         st.caption(question)
                         st.markdown(reply)
-                        st.caption("Sources · " + " · ".join(sources))
+                        st.caption("Demo mode · Synthetic data and project documentation" if demo
+                                   else "Sources · " + " · ".join(sources))
 
                 if current_reply is not None:
                     show_reply(current_reply)
@@ -295,11 +300,11 @@ def show_comparison(unit, locations, history, reporting, cases, all_reporting):
 
 
 @st.fragment
-def show_nigeria_map(cases, reporting, locations, sidebar_unit):
-    st.subheader("Nigeria map")
-    path = DATA / "climate" / "nigeria_lga_boundaries_ocha_matched.geojson"
+def show_nigeria_map(cases, reporting, locations, sidebar_unit, path, demo):
+    st.subheader("Demo map" if demo else "Nigeria map")
     if not path.is_file():
-        st.info("The map needs the matched LGA boundaries. Run the boundary preparation step in the project guide.")
+        st.info("Run `python -m src.demo_data` to generate the fictional boundaries." if demo else
+                "The map needs the matched LGA boundaries. Run the boundary preparation step in the project guide.")
         return
     try:
         boundaries = read_map_boundaries(path, path.stat().st_mtime_ns)
@@ -331,7 +336,8 @@ def show_nigeria_map(cases, reporting, locations, sidebar_unit):
         st.info("This measure has no available values for the selected month.")
     st.altair_chart(nigeria_map_chart(boundaries, locations, values, metric, selected), width="stretch",
                     height=530, key=chart_key, on_select=update_map_selection, selection_mode="picked_lga")
-    st.caption("Boundaries · UN OCHA Nigeria ADM2 matched to DHIS2 organisation units.")
+    st.caption("Boundaries · Fictional shapes for the demo." if demo else
+               "Boundaries · UN OCHA Nigeria ADM2 matched to DHIS2 organisation units.")
 
     st.markdown(f"**{name}, {state} · {month_label(month)}**")
     history = cases.loc[cases["org_unit_id"].eq(selected)].set_index("period")
@@ -340,11 +346,19 @@ def show_nigeria_map(cases, reporting, locations, sidebar_unit):
 
 
 def main():
+    demo = os.environ.get("MALARIA_DASHBOARD_DEMO") == "1"
+    data_dir = DEMO_ROOT if demo else DATA
     st.set_page_config(page_title="Nigeria Malaria Forecasting", layout="wide")
     st.title("Nigeria Malaria Forecasting")
-    st.caption("Monthly malaria cases, rainfall, reporting quality, and forecast evaluation across Nigeria")
+    if demo:
+        st.warning("Synthetic demo. Locations, boundaries, figures, and forecasts are fictional.")
+        if not (data_dir / "features" / "case_rainfall_monthly.csv").is_file():
+            st.info("Run `python -m src.demo_data` to generate the demo files, then reload the dashboard.")
+            st.stop()
+    else:
+        st.caption("Monthly malaria cases, rainfall, reporting quality, and forecast evaluation across Nigeria")
 
-    cases = table(DATA / "features" / "case_rainfall_monthly.csv")
+    cases = table(data_dir / "features" / "case_rainfall_monthly.csv")
     roster = cases[["org_unit_id", "org_unit_name", "state"]].drop_duplicates("org_unit_id")
     locations = {uid: (display_name(unit_name), display_name(state))
                  for uid, unit_name, state in roster.itertuples(index=False, name=None)}
@@ -357,14 +371,15 @@ def main():
     location = f"{display_name(units.at[unit, 'org_unit_name'])}, {display_name(state)}"
     st.subheader(location)
 
-    reporting_path = DATA / "routine" / "nhmis_reporting_monthly.csv"
+    reporting_path = data_dir / "routine" / "nhmis_reporting_monthly.csv"
     all_reporting = pd.DataFrame(columns=["org_unit_id", "period"])
     if reporting_path.is_file():
         all_reporting = table(reporting_path)
     reporting = all_reporting.loc[all_reporting["org_unit_id"].eq(unit)].sort_values("period")
 
     overview, trends, comparison, nigeria_map, backtest = st.tabs(
-        ["Overview", "Case and rainfall trends", "LGA comparison", "Nigeria map", "Forecast backtest"]
+        ["Overview", "Case and rainfall trends", "LGA comparison", "Demo map" if demo else "Nigeria map",
+         "Forecast backtest"]
     )
     with overview:
         snapshot_month = show_overview(history, reporting)
@@ -410,20 +425,22 @@ def main():
         show_comparison(unit, locations, history, reporting, cases, all_reporting)
 
     with nigeria_map:
-        show_nigeria_map(cases, all_reporting, locations, unit)
+        boundary_file = "demo_lga_boundaries.geojson" if demo else "nigeria_lga_boundaries_ocha_matched.geojson"
+        show_nigeria_map(cases, all_reporting, locations, unit, data_dir / "climate" / boundary_file, demo)
 
     with backtest:
         first, second = st.columns(2)
         horizon = first.radio("Forecast horizon (months)", [1, 2], horizontal=True)
         delay = second.radio("Assumed input delay (months)", [1, 2], horizontal=True)
-        folder = DATA / "forecast"
+        folder = data_dir / "forecast"
         if delay == 2:
             folder = folder / "delay2"
         year, predictions, scores = backtest_tables(folder, delay)
         filtered = predictions.loc[predictions["org_unit_id"].eq(unit)
                                    & predictions["horizon_months"].eq(horizon)]
         local_mae = filtered[list(MODELS)].sub(filtered["confirmed_cases"], axis=0).abs().mean()
-        st.caption(f"Forecasts were evaluated retrospectively on {year} case counts. The input delays are assumptions. "
+        st.caption("The demo uses simulated estimates to illustrate backtest charts and settings." if demo else
+                   f"Forecasts were evaluated retrospectively on {year} case counts. The input delays are assumptions. "
                    "Prediction intervals have yet to be estimated.")
         if filtered.empty:
             st.info("This LGA has no scored targets for the selected scenario.")
@@ -438,7 +455,7 @@ def main():
             st.dataframe(local, hide_index=True)
         national = scores.loc[scores["horizon_months"].eq(horizon), ["model", "rows", "mae", "mean_bias"]].copy()
         displayed_scores = national.assign(model=national["model"].map(MODELS))
-        st.markdown("**Nationwide backtest errors**")
+        st.markdown("**Backtest errors across demo LGAs**" if demo else "**Nationwide backtest errors**")
         st.dataframe(displayed_scores.round(1).rename(columns={"model": "Model", "rows": "Scored LGA-months",
                                                         "mae": "MAE", "mean_bias": "Mean bias"}),
                      hide_index=True)
@@ -446,7 +463,7 @@ def main():
                    "predicted fewer cases than were reported, on average.")
 
     floating_assistant(location, unit, locations, cases, all_reporting, history.index.tolist(), snapshot_month,
-                       (filtered, national, year, horizon, delay))
+                       (filtered, national, year, horizon, delay), demo)
 
 
 if __name__ == "__main__":
