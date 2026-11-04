@@ -60,8 +60,10 @@ def nigeria_map_chart(boundaries, locations, values, metric, selected=None):
             "lga": name, "state": state, "value": value,
             "display": f"{value:{spec}}{suffix}" if pd.notna(value) else "Unavailable",
         }})
-    picked = alt.selection_point(name="picked_lga", fields=["id"], toggle=False, empty=False, clear=False,
-                                 value=[{"id": selected}] if selected else alt.Undefined)
+    picked = alt.selection_point(name="picked_lga", fields=["id"], toggle=False, clear=False)
+    is_selected = f"datum.id === {json.dumps(selected)}"
+    # Draw the selected outline last so adjacent polygons cannot cover it.
+    features.sort(key=lambda feature: feature["id"] == selected)
     scale = alt.Scale(scheme=scheme, domain=[0, 100]) if field == "completeness_pct" else alt.Scale(scheme=scheme, zero=True)
     color = alt.Color("properties.value:Q", title=metric, scale=scale,
                       legend=alt.Legend(orient="bottom"))
@@ -72,8 +74,8 @@ def nigeria_map_chart(boundaries, locations, values, metric, selected=None):
             .mark_geoshape(invalid=None, cursor="pointer")
             .encode(
                 color=alt.condition("isValid(datum.properties.value)", color, alt.value("#9099a5")),
-                stroke=alt.condition(picked, alt.value("#172534"), alt.value("#f1f4f8")),
-                strokeWidth=alt.condition(picked, alt.value(2.1), alt.value(0.45)),
+                stroke=alt.condition(is_selected, alt.value("#d81b60"), alt.value("#f1f4f8")),
+                strokeWidth=alt.condition(is_selected, alt.value(3), alt.value(0.45)),
                 tooltip=[alt.Tooltip("properties.lga:N", title="LGA"),
                          alt.Tooltip("properties.state:N", title="State or FCT"),
                          alt.Tooltip("properties.display:N", title=metric)],

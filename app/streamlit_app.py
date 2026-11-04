@@ -285,7 +285,7 @@ def show_comparison(unit, locations, history, reporting, cases, all_reporting):
 
 
 @st.fragment
-def show_nigeria_map(cases, reporting, locations):
+def show_nigeria_map(cases, reporting, locations, sidebar_unit):
     st.subheader("Nigeria map")
     path = DATA / "climate" / "nigeria_lga_boundaries_ocha_matched.geojson"
     if not path.is_file():
@@ -303,24 +303,30 @@ def show_nigeria_map(cases, reporting, locations):
     month = first.selectbox("Map month", sorted(cases["period"].unique(), reverse=True), format_func=month_label)
     metric = second.selectbox("Map measure", list(MAP_METRICS))
     values = map_values(cases, reporting, month, metric)
-    st.caption("Click an LGA to see its Overview below the map. Grey areas have unavailable values.")
+    if st.session_state.get("map-sidebar-lga") != sidebar_unit:
+        st.session_state["map-sidebar-lga"] = sidebar_unit
+        st.session_state["map-selected-lga"] = sidebar_unit
+    selected = st.session_state["map-selected-lga"]
+    chart_key = f"nigeria-map-{sidebar_unit}"
+
+    def update_map_selection():
+        selection = st.session_state[chart_key].selection.get("picked_lga", [])
+        if selection and selection[0].get("id") in locations:
+            st.session_state["map-selected-lga"] = selection[0]["id"]
+
+    name, state = locations[selected]
+    st.caption(f"The pink outline shows {name}, {state}. Click an LGA to see its overview below. "
+               "Grey areas have unavailable values.")
     if not values:
         st.info("This measure has no available values for the selected month.")
-    selected = st.session_state.get("map-selected-lga")
-    event = st.altair_chart(nigeria_map_chart(boundaries, locations, values, metric, selected), width="stretch",
-                           height=530, key="nigeria-map", on_select="rerun", selection_mode="picked_lga")
+    st.altair_chart(nigeria_map_chart(boundaries, locations, values, metric, selected), width="stretch",
+                    height=530, key=chart_key, on_select=update_map_selection, selection_mode="picked_lga")
     st.caption("Boundaries · UN OCHA Nigeria ADM2 matched to DHIS2 organisation units.")
 
-    selection = event.selection.get("picked_lga", [])
-    if selection and selection[0].get("id") in locations:
-        selected = selection[0]["id"]
-        st.session_state["map-selected-lga"] = selected
-    if selected in locations:
-        name, state = locations[selected]
-        st.markdown(f"**{name}, {state} · {month_label(month)}**")
-        history = cases.loc[cases["org_unit_id"].eq(selected)].set_index("period")
-        records = reporting.loc[reporting["org_unit_id"].eq(selected)]
-        show_snapshot(history, records, month)
+    st.markdown(f"**{name}, {state} · {month_label(month)}**")
+    history = cases.loc[cases["org_unit_id"].eq(selected)].set_index("period")
+    records = reporting.loc[reporting["org_unit_id"].eq(selected)]
+    show_snapshot(history, records, month)
 
 
 def main():
@@ -394,7 +400,7 @@ def main():
         show_comparison(unit, locations, history, reporting, cases, all_reporting)
 
     with nigeria_map:
-        show_nigeria_map(cases, all_reporting, locations)
+        show_nigeria_map(cases, all_reporting, locations, unit)
 
     with backtest:
         first, second = st.columns(2)
