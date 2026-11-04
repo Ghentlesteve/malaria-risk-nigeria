@@ -33,7 +33,7 @@ The DHS/MIS work remains historical context on prevalence and interventions. Its
 | 3. Relationship analysis | Rainfall and case seasonality, lag associations and variation across LGAs | Initial nationwide analysis complete |
 | 4. Forecasting | Seasonal baseline, case-history model and rainfall-informed model | Initial rolling 2025 backtest complete |
 | 5. Dashboard | Observed trends, retrospective forecasts and reporting-quality status | Local prototype available |
-| 6. AI assistant | Answers from verified dashboard data and cited document search | Floating chat and optional local evidence selection tested |
+| 6. Dashboard assistant | Guided questions with answers from dashboard data | Available in the floating panel |
 | 7. Deployment and integration | Hosted pilot, monitoring, CI/CD and evaluation of Chap/DHIS2 integration | Later phase |
 
 See [APPROACH.md](APPROACH.md) for the design and evaluation rules, and [docs/monthly_case_data.md](docs/monthly_case_data.md) for the first input specification.
@@ -97,22 +97,9 @@ For the existing survey analysis, install `requirements.txt` in an isolated envi
 
 The dashboard opens on **Overview**. Choose an LGA and a snapshot month to see reported cases, rainfall, and NHMIS reporting rates for the same period. The snapshot starts on the latest month with a reported case count when one is available.
 
-Click **Ask assistant** in the lower-right corner of any dashboard tab. Try “What is the latest reported malaria case count?”, “Reporting completeness for 2025-01”, or “Which model had the lowest error for this LGA?”. The sidebar sets the default LGA and the backtest settings.
+Click **Ask assistant** in the lower-right corner of any dashboard tab. Start with **Tell me about this LGA** or choose a topic. Each answer shows its sources and offers related questions. Use **More questions** to browse the topic and **Start over** to clear the conversation.
 
-For case counts and reporting rates, you can name another LGA in your question. Try “Latest case count for Oji River in Enugu” or “Compare reporting rates between Oji River in Enugu and Offa in Kwara”. Add a state when the LGA name is ambiguous. Use `YYYY-MM` to specify a month. Comparisons default to the latest month with a reporting record for both LGAs and flag unavailable rates. The chat keeps the last eight exchanges in the current dashboard session.
-
-Dashboard answers use local tables and show their source. Other queries return keyword-matched excerpts from selected sections of the README, methodology, and monthly case-data guide.
-
-### Optional local model for methodology questions
-
-The dashboard can use a locally installed Ollama model to select excerpts that answer a question about the project. Follow the [Ollama local-only setup](https://docs.ollama.com/faq#how-do-i-disable-ollama-s-cloud-features), run Ollama on its default loopback port, and select a locally downloaded model with structured-output support. In the PowerShell session that starts Streamlit, set the exact model name from `ollama list`.
-
-```powershell
-$env:MALARIA_ASSISTANT_OLLAMA_MODEL = '<local-model-name>'
-python -m streamlit run app/streamlit_app.py --server.address 127.0.0.1
-```
-
-The model receives the typed question and retrieved project documentation excerpts. Case records, reporting tables, selected filters, and chat history stay in the dashboard. The dashboard displays the selected excerpts verbatim with their citations. If the model is disabled, unavailable, or returns an invalid selection, the dashboard shows the original search excerpts.
+The sidebar sets the LGA and the Forecast backtest tab sets the backtest settings. Choose a month in the assistant for questions about a specific period. **Compare with another LGA** lets you pick an LGA anywhere in Nigeria and compare both places for the same month. The assistant uses local tables and project definitions. It requires no model setup or training.
 
 ## Structure
 

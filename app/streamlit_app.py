@@ -3,18 +3,15 @@
 import hashlib
 import io
 import json
-import os
 from pathlib import Path
-from string import punctuation
 
 import pandas as pd
 import streamlit as st
 
-from src.dashboard_questions import (
-    CASE_COUNT, COMPARE_REPORTING, LGA_OVERVIEW, REPORTING, match_dashboard_question, match_named_question, resolve_lga,
+from src.guided_questions import (
+    BACKTEST_SOURCE, CASE_SOURCE, EXPLANATIONS, FOLLOW_UPS, QUESTIONS, RAIN_SOURCE, REPORT_SOURCE, TOPICS,
+    compare_answer, forecast_answer, latest_snapshot_month, month_label, report_detail, series_answer, snapshot_metrics,
 )
-from src.document_answer import select_document_evidence
-from src.document_search import search_documents
 
 DATA = Path(__file__).resolve().parents[1] / "data" / "processed"
 MODELS = {
@@ -22,13 +19,6 @@ MODELS = {
     "case_history": "Case history",
     "case_rainfall": "Case history + rainfall",
 }
-MARKDOWN_ESCAPES = str.maketrans({character: "\\" + character for character in punctuation})
-DOCUMENT_LABELS = {
-    "README.md": "Project guide",
-    "APPROACH.md": "Project methodology",
-    "docs/monthly_case_data.md": "Monthly case data guide",
-}
-REPORTING_SOURCE = "NHMIS Monthly Summary Form · Data quality"
 
 
 @st.cache_data
@@ -81,92 +71,60 @@ def reporting_answer(period, reporting):
             f"were completed, with {row.reports_on_time:,.0f} completed on time.")
 
 
-def dashboard_answer(question, period, history, reporting, local_mae, scored_months, year, horizon, delay):
-    if question == CASE_COUNT:
-        observed = history.set_index("period")["confirmed_cases"].dropna()
-        if period and period not in observed.index:
-            reply = f"No case count is available for this LGA in {period}."
-        elif observed.empty:
-            reply = "No case counts are available for this LGA."
-        else:
-            month = period or observed.index.max()
-            reply = f"**{observed.at[month]:,.0f} reported confirmed cases** in {month}."
-        source = "Monthly NHMIS case export · Case and rainfall trends"
-    elif question == REPORTING:
-        reply = reporting_answer(period, reporting)
-        source = REPORTING_SOURCE
+def guided_reply(question, month, unit, other, locations, cases, reporting, backtest_data):
+    if question in EXPLANATIONS:
+        reply, source = EXPLANATIONS[question]
+        return reply, (source,)
+
+    name = ", ".join(locations[unit])
+    history = cases.loc[cases["org_unit_id"].eq(unit)].set_index("period")
+    records = reporting.loc[reporting["org_unit_id"].eq(unit)]
+    title = f"**{name} · {month_label(month)}**"
+    if question == "overview":
+        reply = "\n".join(f"- {label} · **{value}**" for label, value in snapshot_metrics(history, records, month))
+        sources = (CASE_SOURCE, RAIN_SOURCE, REPORT_SOURCE)
+    elif question == "data_latest":
+        observed = history["confirmed_cases"].dropna()
+        reply = (f"**{month_label(observed.index.max())}** is the latest month with a reported count."
+                 if not observed.empty else "There are no reported case counts for this LGA.")
+        title, sources = f"**{name}**", (CASE_SOURCE,)
+    elif question == "data_coverage":
+        title = f"**{name}**"
+        reply = (f"The dashboard series spans **{month_label(history.index.min())} through "
+                 f"{month_label(history.index.max())}**. It contains case counts in "
+                 f"**{history['confirmed_cases'].count()} months**.")
+        sources = (CASE_SOURCE,)
+    elif question.startswith(("case_", "cases_", "rain_")):
+        reply = series_answer(question, history, month)
+        sources = (RAIN_SOURCE,) if question.startswith("rain_") else (CASE_SOURCE,)
+        if question == "rain_recent":
+            sources = (CASE_SOURCE, RAIN_SOURCE)
+    elif question.startswith("report_"):
+        reply = reporting_answer(month, records) if question == "report_rates" else report_detail(question, records, month)
+        sources = (REPORT_SOURCE,)
+    elif question.startswith("compare_"):
+        other_name = ", ".join(locations[other])
+        other_history = cases.loc[cases["org_unit_id"].eq(other)].set_index("period")
+        other_records = reporting.loc[reporting["org_unit_id"].eq(other)]
+        title = (f"**LGA comparison · {month_label(month)}**" if question == "compare_summary"
+                 else f"**{name} and {other_name} · {month_label(month)}**")
+        if question == "compare_shared":
+            title = f"**{name} and {other_name}**"
+        reply = compare_answer(question, month, (name, other_name), (history, other_history), (records, other_records))
+        sources = {
+            "compare_summary": (CASE_SOURCE, RAIN_SOURCE, REPORT_SOURCE),
+            "compare_cases": (CASE_SOURCE,), "compare_recent": (CASE_SOURCE,), "compare_rain": (RAIN_SOURCE,),
+        }.get(question, (REPORT_SOURCE,))
     else:
-        if not scored_months:
-            reply = "No scored months are available for this LGA under the selected settings."
-        else:
-            minimum = local_mae.min()
-            best = ", ".join(MODELS[name] for name in local_mae.index[local_mae.eq(minimum)])
-            reply = (f"**{best}** had the lowest mean absolute error, **{minimum:,.1f} cases per month**, "
-                     f"across {scored_months} scored months in {year}.")
-        reply += f"\n\nBacktest settings: {horizon}-month horizon, {delay}-month assumed input delay."
-        source = "Verified retrospective predictions · Forecast backtest"
-    return reply, source
+        predictions, national, year, horizon, delay = backtest_data
+        title = f"**{name} · {year} backtest**"
+        reply = forecast_answer(question, month, predictions, national, MODELS)
+        reply += f"\n\nSettings · {horizon}-month horizon and {delay}-month assumed input delay."
+        sources = (BACKTEST_SOURCE,)
+    return f"{title}\n\n{reply}", sources
 
 
-def assistant_reply(query, selected_unit, locations, cases, reporting, backtest_data):
-    answer = match_dashboard_question(query)
-    units = [selected_unit]
-    named = match_named_question(query) if not answer else None
-    if named:
-        question, period, names = named
-        answer = question, period
-        roster = [(uid, unit_name, state) for uid, (unit_name, state) in locations.items()]
-        try:
-            units = [resolve_lga(name, roster) for name in names]
-        except ValueError as error:
-            return str(error).translate(MARKDOWN_ESCAPES), []
-    if answer:
-        question, period = answer
-        if question == LGA_OVERVIEW:
-            history = cases.loc[cases["org_unit_id"].eq(selected_unit)].set_index("period")
-            records = reporting.loc[reporting["org_unit_id"].eq(selected_unit)]
-            month = period or latest_snapshot_month(history)
-            metrics = snapshot_metrics(history, records, month)
-            lines = "\n".join(f"- {label}: **{value}**" for label, value in metrics)
-            return f"**{', '.join(locations[selected_unit])} · {month_label(month)}**\n\n{lines}", [
-                ("", "Monthly NHMIS case export"), ("", "CHIRPS rainfall"), ("", REPORTING_SOURCE),
-            ]
-        if question == COMPARE_REPORTING:
-            if units[0] == units[1]:
-                return "Choose two different LGAs to compare their reporting rates.", []
-            first, second = [reporting.loc[reporting["org_unit_id"].eq(unit)] for unit in units]
-            if not period:
-                period = max(set(first["period"]) & set(second["period"]), default=None)
-                if not period:
-                    return "These LGAs have no shared NHMIS reporting month.", [("", REPORTING_SOURCE)]
-            parts = [f"**NHMIS reporting comparison · {period}**"]
-            for unit, records in zip(units, (first, second)):
-                parts.append(f"**{', '.join(locations[unit])}**\n\n{reporting_answer(period, records)}")
-            return "\n\n".join(parts), [("", REPORTING_SOURCE)]
-        unit = units[0]
-        reply, source = dashboard_answer(question, period, cases.loc[cases["org_unit_id"].eq(unit)],
-                                         reporting.loc[reporting["org_unit_id"].eq(unit)], *backtest_data)
-        return f"**{', '.join(locations[unit])}**\n\n{reply}", [("", source)]
-
-    try:
-        matches = search_documents(DATA.parents[1], query)
-    except OSError:
-        return "The project documentation is unavailable.", []
-    if not matches:
-        return "I couldn’t find a dashboard answer or a matching excerpt. Try one of the example questions.", []
-    reply = "I found these related excerpts in the project documentation."
-    model = os.getenv("MALARIA_ASSISTANT_OLLAMA_MODEL", "").strip()
-    if model:
-        selected = select_document_evidence(model, query, matches)
-        if selected:
-            matches = selected
-            reply = "The local model selected these excerpts from the project documentation."
-    return reply, [
-        (match["excerpt"], f"{DOCUMENT_LABELS[match['file']]} · {match['section']}") for match in matches
-    ]
-
-
-def floating_assistant(location, selected_unit, locations, cases, reporting, backtest_data):
+def floating_assistant(location, unit, locations, cases, reporting, months, snapshot_month, backtest_data):
     st.html("""
         <style>
         .st-key-assistant-launcher {
@@ -183,73 +141,96 @@ def floating_assistant(location, selected_unit, locations, cases, reporting, bac
         .st-key-assistant-panel {
             width: min(25rem, calc(100vw - 4rem));
         }
-        .st-key-assistant-transcript {
-            max-height: 42dvh;
-        }
         </style>
     """)
     with st.container(key="assistant-launcher"):
         with st.popover("Ask assistant", type="primary", icon=":material/chat:"):
             with st.container(key="assistant-panel"):
                 st.markdown("**Malaria dashboard assistant**")
-                st.caption(f"Sidebar selection: {location}. You can name another LGA in your question.")
-                transcript = st.container(key="assistant-transcript", height=280, border=True)
-                query = st.chat_input("Ask about this LGA or the project", key="assistant-question", max_chars=200)
-                exchanges = st.session_state.get("assistant-exchanges", [])
-                if query and query.strip():
-                    query = query.strip()
-                    with st.spinner("Finding an answer…"):
-                        reply, sources = assistant_reply(query, selected_unit, locations, cases, reporting, backtest_data)
-                    exchanges = [*exchanges[-7:], (query, reply, sources)]
-                    st.session_state["assistant-exchanges"] = exchanges
+                st.caption(location)
+                month = st.selectbox("Question month", months, index=months.index(snapshot_month),
+                                     format_func=month_label, key=f"guided-month-{unit}")
+                state = st.session_state
+                topic = state.get("guided-topic")
+                page = state.get("guided-page", 0)
+                followups = state.get("guided-followups", ())
+                exchanges = state.get("guided-exchanges", [])
+                other = None
+                if topic == "compare":
+                    candidates = sorted((key for key in locations if key != unit), key=locations.get)
+                    other = st.selectbox("Compare with", candidates, index=None,
+                                         placeholder="Choose an LGA and state",
+                                         format_func=lambda key: ", ".join(locations[key]),
+                                         key=f"guided-other-{unit}")
 
-                with transcript:
-                    if not exchanges:
-                        st.markdown("Try asking:\n\n"
-                                    "- Tell me about this LGA\n"
-                                    "- What is the latest reported malaria case count?\n"
-                                    "- Reporting completeness for 2025-01\n"
-                                    "- Which model had the lowest error for this LGA?\n"
-                                    "- Compare reporting rates between Oji River in Enugu and Offa in Kwara")
-                        st.caption("Use YYYY-MM for a specific month. You can also ask about the project methods.")
-                    for question, reply, sources in exchanges:
-                        with st.chat_message("user"):
-                            st.text(question, width="stretch")
-                        with st.chat_message("assistant"):
-                            st.markdown(reply)
-                            for excerpt, source in sources:
-                                if excerpt:
-                                    st.markdown(excerpt)
-                                st.caption(f"Source: {source}")
+                def browse(next_topic=None, next_page=0):
+                    state["guided-topic"] = next_topic
+                    state["guided-page"] = next_page
+                    state["guided-followups"] = ()
 
+                def answer(question):
+                    if question.startswith("compare_") and other is None:
+                        browse("compare")
+                        return
+                    reply, sources = guided_reply(question, month, unit, other, locations, cases, reporting, backtest_data)
+                    state["guided-exchanges"] = [*exchanges[-7:], (QUESTIONS[question], reply, sources)]
+                    group = next((name for name, (_, items) in TOPICS.items()
+                                  if any(key == question for key, _ in items)), None)
+                    browse(group)
+                    suggestions = FOLLOW_UPS.get(question)
+                    if suggestions is None:
+                        items = TOPICS[group][1]
+                        start = next(index for index, (key, _) in enumerate(items) if key == question)
+                        suggestions = tuple(key for key, _ in (items[start + 1:] + items[:start])[:4])
+                    state["guided-followups"] = suggestions
 
-def latest_snapshot_month(history):
-    observed = history["confirmed_cases"].dropna()
-    return observed.index.max() if not observed.empty else history.index.max()
+                def start_over():
+                    browse()
+                    state["guided-exchanges"] = []
 
+                def show_reply(exchange):
+                    question, reply, sources = exchange
+                    with st.chat_message("assistant"):
+                        st.caption(question)
+                        st.markdown(reply)
+                        st.caption("Sources · " + " · ".join(sources))
 
-def month_label(month):
-    return pd.Period(month, freq="M").strftime("%B %Y")
+                if exchanges:
+                    show_reply(exchanges[-1])
 
+                def question_button(key):
+                    st.button(QUESTIONS[key], key=f"guided-question-{key}", width="stretch",
+                              disabled=topic == "compare" and key.startswith("compare_") and other is None,
+                              on_click=answer, args=(key,))
 
-def snapshot_metrics(history, reporting, month):
-    cases = history["confirmed_cases"].get(month)
-    rainfall = history["rainfall_mm"].get(month)
-    monthly_reporting = reporting.loc[reporting["period"].eq(month)]
-    completeness = timeliness = None
-    if not monthly_reporting.empty:
-        report = monthly_reporting.iloc[0]
-        if report["status"] == "OK":
-            completeness, timeliness = report[["completeness_pct", "timeliness_pct"]]
-
-    metrics = (
-        ("Reported confirmed cases", cases, ",.0f", ""),
-        ("Rainfall (mm)", rainfall, ",.1f", ""),
-        ("Reporting completeness", completeness, ".1f", "%"),
-        ("Reporting timeliness", timeliness, ".1f", "%"),
-    )
-    return [(label, f"{value:{number_format}}{suffix}" if pd.notna(value) else "Unavailable")
-            for label, value, number_format, suffix in metrics]
+                if followups:
+                    st.caption("What would you like to ask next?")
+                    for key in followups:
+                        question_button(key)
+                    if topic:
+                        st.button("More questions on this topic", on_click=browse, args=(topic,))
+                elif topic:
+                    label, items = TOPICS[topic]
+                    st.caption(label)
+                    for key, _ in items[page:page + 4]:
+                        question_button(key)
+                    if page + 4 < len(items):
+                        st.button("More questions", on_click=browse, args=(topic, page + 4))
+                    if page:
+                        st.button("Previous questions", on_click=browse, args=(topic, page - 4))
+                else:
+                    st.caption("Choose a question or topic")
+                    question_button("overview")
+                    for key, (label, _) in TOPICS.items():
+                        st.button(label, key=f"guided-topic-{key}", width="stretch", on_click=browse, args=(key,))
+                if topic or followups:
+                    st.button("All topics", on_click=browse)
+                if exchanges:
+                    st.button("Start over", on_click=start_over)
+                if len(exchanges) > 1:
+                    with st.expander("Earlier replies"):
+                        for exchange in reversed(exchanges[:-1]):
+                            show_reply(exchange)
 
 
 def show_overview(history, reporting):
@@ -260,6 +241,7 @@ def show_overview(history, reporting):
         column.metric(label, value, border=True)
     st.caption("Reporting rates describe submission of the NHMIS Monthly Summary Form.")
     st.info("Forecast backtest shows how models performed on historical data. Live forecasts are planned.")
+    return month
 
 
 def main():
@@ -288,7 +270,7 @@ def main():
 
     overview, trends, backtest = st.tabs(["Overview", "Case and rainfall trends", "Forecast backtest"])
     with overview:
-        show_overview(history, reporting)
+        snapshot_month = show_overview(history, reporting)
     with trends:
         first, second = st.columns(2)
         first.metric("Months with case counts", int(history["confirmed_cases"].count()))
@@ -342,15 +324,16 @@ def main():
             st.markdown(f"**LGA errors across {len(filtered)} scored months**")
             st.dataframe(local, hide_index=True)
         national = scores.loc[scores["horizon_months"].eq(horizon), ["model", "rows", "mae", "mean_bias"]].copy()
-        national["model"] = national["model"].map(MODELS)
+        displayed_scores = national.assign(model=national["model"].map(MODELS))
         st.markdown("**Nationwide backtest errors**")
-        st.dataframe(national.round(1).rename(columns={"model": "Model", "rows": "Scored LGA-months",
+        st.dataframe(displayed_scores.round(1).rename(columns={"model": "Model", "rows": "Scored LGA-months",
                                                         "mae": "MAE", "mean_bias": "Mean bias"}),
                      hide_index=True)
         st.caption("MAE is the average absolute error in cases per LGA-month. Negative bias means the model "
                    "predicted fewer cases than were reported, on average.")
 
-    floating_assistant(location, unit, locations, cases, all_reporting, (local_mae, len(filtered), year, horizon, delay))
+    floating_assistant(location, unit, locations, cases, all_reporting, history.index.tolist(), snapshot_month,
+                       (filtered, national, year, horizon, delay))
 
 
 if __name__ == "__main__":
