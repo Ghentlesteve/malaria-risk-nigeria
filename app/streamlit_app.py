@@ -213,10 +213,35 @@ def floating_assistant(location, selected_unit, locations, cases, reporting, bac
                                 st.caption(f"Source: {source}")
 
 
+def show_overview(history, reporting):
+    observed = history["confirmed_cases"].dropna()
+    latest_month = observed.index[-1] if not observed.empty else history.index[-1]
+    month = st.selectbox("Snapshot month", history.index.tolist(), index=history.index.get_loc(latest_month),
+                         format_func=lambda value: pd.Period(value, freq="M").strftime("%B %Y"))
+    cases, rainfall = history.loc[month, ["confirmed_cases", "rainfall_mm"]]
+    monthly_reporting = reporting.loc[reporting["period"].eq(month)]
+    completeness = timeliness = None
+    if not monthly_reporting.empty:
+        report = monthly_reporting.iloc[0]
+        if report["status"] == "OK":
+            completeness, timeliness = report[["completeness_pct", "timeliness_pct"]]
+
+    for column, (label, value, number_format, suffix) in zip(st.columns(4), (
+        ("Reported confirmed cases", cases, ",.0f", ""),
+        ("Rainfall (mm)", rainfall, ",.1f", ""),
+        ("Reporting completeness", completeness, ".1f", "%"),
+        ("Reporting timeliness", timeliness, ".1f", "%"),
+    )):
+        display_value = f"{value:{number_format}}{suffix}" if pd.notna(value) else "Unavailable"
+        column.metric(label, display_value, border=True)
+    st.caption("Reporting rates describe submission of the NHMIS Monthly Summary Form.")
+    st.info("Forecast backtest shows how models performed on historical data. Live forecasts are planned.")
+
+
 def main():
     st.set_page_config(page_title="Nigeria Malaria Forecasting", layout="wide")
     st.title("Nigeria Malaria Forecasting")
-    st.caption("Stage 6 prototype · Monthly reported confirmed cases and retrospective forecasts")
+    st.caption("Monthly malaria cases, rainfall, reporting quality, and forecast evaluation across Nigeria")
 
     cases = table(DATA / "features" / "case_rainfall_monthly.csv")
     roster = cases[["org_unit_id", "org_unit_name", "state"]].drop_duplicates("org_unit_id")
@@ -237,7 +262,9 @@ def main():
         all_reporting = table(reporting_path)
     reporting = all_reporting.loc[all_reporting["org_unit_id"].eq(unit)].sort_values("period")
 
-    trends, backtest = st.tabs(["Case and rainfall trends", "Forecast backtest"])
+    overview, trends, backtest = st.tabs(["Overview", "Case and rainfall trends", "Forecast backtest"])
+    with overview:
+        show_overview(history, reporting)
     with trends:
         first, second = st.columns(2)
         first.metric("Months with case counts", int(history["confirmed_cases"].count()))
