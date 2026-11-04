@@ -14,9 +14,12 @@ PATTERNS = (
     (CASE_COUNT, rf"{REQUEST}(?:latest|most recent) {CASE_TERMS}"),
     (CASE_COUNT, rf"{REQUEST}{CASE_TERMS} (?:for|in) {MONTH}"),
     (CASE_COUNT, rf"how many (?:confirmed )?malaria cases were reported (?:for|in) {MONTH}"),
+    (CASE_COUNT, r"how many (?:confirmed )?malaria cases were reported in the (?:latest|most recent) month"),
     (REPORTING, rf"{REQUEST}(?:nhmis )?reporting (?:completeness and timeliness|completeness|timeliness)"
                 rf"(?: (?:for|in) {MONTH})?"),
-    (MODEL_ERROR, r"which model (?:had|has) the lowest (?:backtest )?error"),
+    (REPORTING, rf"(?:were (?:nhmis )?reports|how many (?:nhmis )?reports were) "
+                rf"(?:submitted|completed) on time (?:for|in) {MONTH}"),
+    (MODEL_ERROR, r"which model (?:had|has) the lowest (?:backtest )?(?:error|mae|mean absolute error)"),
 )
 
 

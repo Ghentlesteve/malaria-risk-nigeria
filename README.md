@@ -97,7 +97,18 @@ For the existing survey analysis, install `requirements.txt` in an isolated envi
 
 Click **Ask assistant** in the lower-right corner of either dashboard tab. Try “What is the latest reported malaria case count?”, “Reporting completeness for 2025-01”, or “Which model had the lowest error for this LGA?”. Use `YYYY-MM` to ask for case counts or reporting rates in a specific month. Answers use the LGA and forecast settings selected when you send the question. The chat keeps the last eight exchanges in the current dashboard session.
 
-Dashboard answers use local tables and show their source. Other queries return keyword-matched excerpts from selected sections of the README, methodology, and monthly case-data guide. Open-ended LLM answers are pending.
+Dashboard answers use local tables and show their source. Other queries return keyword-matched excerpts from selected sections of the README, methodology, and monthly case-data guide.
+
+### Optional local model for methodology questions
+
+The dashboard can use a locally installed Ollama model to explain retrieved project documentation. Follow the [Ollama local-only setup](https://docs.ollama.com/faq#how-do-i-disable-ollama-s-cloud-features), run Ollama on its default loopback port, and select a locally downloaded model with structured-output support. In the PowerShell session that starts Streamlit, set the exact model name from `ollama list`.
+
+```powershell
+$env:MALARIA_ASSISTANT_OLLAMA_MODEL = '<local-model-name>'
+python -m streamlit run app/streamlit_app.py --server.address 127.0.0.1
+```
+
+The model receives the typed question and retrieved project documentation excerpts. Case records, reporting tables, selected filters, and chat history stay in the dashboard. Generated explanations show the cited excerpts. If the model is disabled, unavailable, or returns an answer without valid excerpt IDs, the dashboard shows the search excerpts. Review generated explanations against the cited text when evaluating a model.
 
 ## Structure
 

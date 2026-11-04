@@ -3,12 +3,15 @@
 import hashlib
 import io
 import json
+import os
 from pathlib import Path
+from string import punctuation
 
 import pandas as pd
 import streamlit as st
 
 from src.dashboard_questions import CASE_COUNT, REPORTING, match_dashboard_question
+from src.document_answer import answer_from_documents
 from src.document_search import search_documents
 
 DATA = Path(__file__).resolve().parents[1] / "data" / "processed"
@@ -17,6 +20,7 @@ MODELS = {
     "case_history": "Case history",
     "case_rainfall": "Case history + rainfall",
 }
+MARKDOWN_ESCAPES = str.maketrans({character: "\\" + character for character in punctuation})
 
 
 @st.cache_data
@@ -108,7 +112,14 @@ def assistant_reply(query, location, answer_data):
         return "The project documentation is unavailable.", []
     if not matches:
         return "I couldn’t find a dashboard answer or a matching excerpt. Try one of the example questions.", []
-    return "I found these related excerpts in the project documentation.", [
+    reply = "I found these related excerpts in the project documentation."
+    model = os.getenv("MALARIA_ASSISTANT_OLLAMA_MODEL", "").strip()
+    if model:
+        generated = answer_from_documents(model, query, matches)
+        if generated:
+            answer, matches = generated
+            reply = f"**Explanation from the local model**\n\n{answer.translate(MARKDOWN_ESCAPES)}"
+    return reply, [
         (match["excerpt"], f"{match['file']} · {match['section']}") for match in matches
     ]
 
