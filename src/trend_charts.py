@@ -58,7 +58,7 @@ def seasonal_chart(data, field):
     base = alt.Chart(data).mark_rect(cornerRadius=2).encode(
         x=alt.X("month:O", sort=list(month_abbr)[1:], title=None,
                 scale=alt.Scale(domain=list(month_abbr)[1:], paddingInner=0.08), axis=alt.Axis(labelAngle=0)),
-        y=alt.Y("year:O", sort="ascending", title=None, scale=alt.Scale(paddingInner=0.12),
+        y=alt.Y("year:O", sort="descending", title=None, scale=alt.Scale(paddingInner=0.12),
                 axis=alt.Axis(labelOverlap=False)),
         tooltip=tooltip,
     )

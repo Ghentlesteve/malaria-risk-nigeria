@@ -236,7 +236,8 @@ def floating_assistant(location, unit, locations, cases, reporting, months, snap
 
 def show_overview(history, reporting):
     latest_month = latest_snapshot_month(history)
-    month = st.selectbox("Snapshot month", history.index.tolist(), index=history.index.get_loc(latest_month),
+    months = sorted(history.index, reverse=True)
+    month = st.selectbox("Snapshot month", months, index=months.index(latest_month),
                          format_func=month_label)
     for column, (label, value) in zip(st.columns(4), snapshot_metrics(history, reporting, month)):
         column.metric(label, value, border=True)
