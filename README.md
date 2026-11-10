@@ -81,6 +81,14 @@ Run `python -m src.model` from a Python environment with pandas, NumPy and sciki
 
 To check sensitivity to slower publication, run `python -m src.model --case-delay 2 --rainfall-delay 2 --output data/processed/forecast/delay2`. The delays are assumptions because the retrospective files do not establish what was actually available at each historical forecast date. Case counts represent reported cases and historical revisions may affect results.
 
+Replay an issue date with the same models using the following command. The October 2025 replay uses inputs through September and forecasts November and December. It writes the predictions and an audit with the issue date, input cutoffs, and file checksums.
+
+```powershell
+python -m src.forecast --issue-month 2025-10 --rainfall data/processed/climate/rainfall_monthly_2019_2025.csv --output data/processed/forecast_runs/2025-10-replay
+```
+
+For a new issue month, supply updated case and rainfall inputs through their required cutoffs. Repeat `--rainfall` to include separate rainfall files with distinct LGA-month keys. Forecasts use the existing one-month input delay by default. Historical replays use calendar cutoffs applied to retrospective exports.
+
 After generating the joined case table and both backtest runs, start the local dashboard from a Python environment with Streamlit 1.52.2 and pandas.
 
 ```powershell

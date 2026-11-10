@@ -41,18 +41,23 @@ def predict(train, test, columns):
     return np.maximum(0, np.expm1(model.predict(test[columns])))
 
 
-def evaluate(case_path, rain_path, output, holdout_year, case_delay, rainfall_delay):
-    if not 1 <= case_delay <= 10 or rainfall_delay < 1:
-        raise ValueError("Use a case delay of 1–10 months and a rainfall delay of at least one month.")
+def read_case_history(case_path):
     cases = pd.read_csv(case_path, usecols=["org_unit_id", "period", "confirmed_cases"],
                         dtype={"org_unit_id": str})
     cases["target_month"] = cases["period"].map(month_index)
-    rainfall = {key: value if value != "" else np.nan for key, value in read_rainfall(rain_path).items()}
     observed = cases["confirmed_cases"].dropna()
     if cases.duplicated(["org_unit_id", "target_month"]).any() or not (
         np.isfinite(observed).all() and observed.ge(0).all()
     ):
         raise ValueError("Case records must have unique LGA-month keys and nonnegative finite counts.")
+    return cases
+
+
+def evaluate(case_path, rain_path, output, holdout_year, case_delay, rainfall_delay):
+    if not 1 <= case_delay <= 10 or rainfall_delay < 1:
+        raise ValueError("Use a case delay of 1–10 months and a rainfall delay of at least one month.")
+    cases = read_case_history(case_path)
+    rainfall = {key: value if value != "" else np.nan for key, value in read_rainfall(rain_path).items()}
     predictions, coverage = [], []
     with threadpool_limits(limits=4):
         for horizon in (1, 2):
