@@ -1,4 +1,4 @@
-"""Generate one- and two-month malaria forecasts for a specified issue month."""
+"""Generate monthly malaria forecasts for a specified issue month."""
 
 import argparse
 import calendar
@@ -10,7 +10,7 @@ from threadpoolctl import threadpool_limits
 
 from src.climate_data import digest, periods, write_json
 from src.features import month_index, read_rainfall
-from src.model import CLIMATE, HISTORY, predict, prepare_features, read_case_history
+from src.model import CLIMATE, HISTORY, MAX_HORIZON, forecast_horizons, predict, prepare_features, read_case_history
 
 
 def month_label(index):
@@ -18,7 +18,8 @@ def month_label(index):
     return f"{year:04d}-{month_zero + 1:02d}"
 
 
-def run_forecast(case_path, rainfall_paths, output, issue_month, case_delay=1, rainfall_delay=1):
+def run_forecast(case_path, rainfall_paths, output, issue_month, case_delay=1, rainfall_delay=1, *, max_horizon=2):
+    horizons = forecast_horizons(max_horizon)
     periods(issue_month, issue_month)
     if not 1 <= case_delay <= 10 or rainfall_delay < 1:
         raise ValueError("Use a case delay of 1–10 months and a rainfall delay of at least one month.")
@@ -54,7 +55,7 @@ def run_forecast(case_path, rainfall_paths, output, issue_month, case_delay=1, r
     locations = history["org_unit_id"].drop_duplicates()
     output_frames = []
     with threadpool_limits(limits=4):
-        for horizon in (1, 2):
+        for horizon in horizons:
             target = issue + horizon
             future = pd.DataFrame({"org_unit_id": locations, "period": month_label(target),
                                    "target_month": target, "confirmed_cases": np.nan})
@@ -88,7 +89,7 @@ def run_forecast(case_path, rainfall_paths, output, issue_month, case_delay=1, r
     year, month = map(int, issue_month.split("-"))
     audit = {
         "issue_date": f"{issue_month}-{calendar.monthrange(year, month)[1]:02d}",
-        "target_months": [month_label(issue + horizon) for horizon in (1, 2)],
+        "target_months": [month_label(issue + horizon) for horizon in horizons],
         "case_cutoff": month_label(case_cutoff), "rainfall_cutoff": month_label(rainfall_cutoff),
         "case_delay_months": case_delay, "rainfall_delay_months": rainfall_delay,
         "cases_sha256": input_hashes[0], "rainfall_sha256": input_hashes[1:],
@@ -107,11 +108,12 @@ def main():
     parser.add_argument("--issue-month", required=True, help="Month-end forecast issue in YYYY-MM format.")
     parser.add_argument("--case-delay", type=int, default=1)
     parser.add_argument("--rainfall-delay", type=int, default=1)
+    parser.add_argument("--max-horizon", type=int, choices=forecast_horizons(MAX_HORIZON), default=2)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     try:
         result = run_forecast(args.cases, args.rainfall, args.output, args.issue_month,
-                              args.case_delay, args.rainfall_delay)
+                              args.case_delay, args.rainfall_delay, max_horizon=args.max_horizon)
     except (OSError, ValueError) as exc:
         parser.exit(1, f"Forecast failed: {exc}\n")
     print(f"Issued {result['issue_date']} for {', '.join(result['target_months'])}.")

@@ -89,6 +89,15 @@ python -m src.forecast --issue-month 2025-10 --rainfall data/processed/climate/r
 
 For a new issue month, supply updated case and rainfall inputs through their required cutoffs. Repeat `--rainfall` to include separate rainfall files with distinct LGA-month keys. Forecasts use the existing one-month input delay by default. Historical replays use calendar cutoffs applied to retrospective exports.
 
+Use `--max-horizon 6` with either `src.model` or `src.forecast` to evaluate or generate forecasts for months one through six. Both commands default to two months. Give the extended backtest a separate output directory to keep it distinct from the dashboard's existing backtest.
+
+After generating a forecast trial, point the local dashboard to the folder that contains its CSV and audit. The **Forecasts** tab defaults to **Next 2 months**. It offers **Next 4 months** and **Next 6 months** when the run covers those windows.
+
+```powershell
+$env:MALARIA_DASHBOARD_FORECAST_DIR = "data/processed/forecast_runs/2026-10-trial-6mo"
+python -m streamlit run app/streamlit_app.py --server.address 127.0.0.1 --server.port 8529
+```
+
 After generating the joined case table and both backtest runs, start the local dashboard from a Python environment with Streamlit 1.52.2 and pandas.
 
 ```powershell

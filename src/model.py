@@ -13,6 +13,13 @@ from src.features import month_index, read_rainfall
 
 HISTORY = ["seasonal_naive", "case_lag0", "case_lag1", "case_lag2", "month_sin", "month_cos"]
 CLIMATE = HISTORY + ["rain_lag0", "rain_lag1", "rain_lag2"]
+MAX_HORIZON = 6
+
+
+def forecast_horizons(max_horizon):
+    if not 1 <= max_horizon <= MAX_HORIZON:
+        raise ValueError(f"Maximum horizon must be between 1 and {MAX_HORIZON} months.")
+    return range(1, max_horizon + 1)
 
 
 def prepare_features(cases, rainfall, horizon, case_delay, rainfall_delay):
@@ -53,14 +60,15 @@ def read_case_history(case_path):
     return cases
 
 
-def evaluate(case_path, rain_path, output, holdout_year, case_delay, rainfall_delay):
+def evaluate(case_path, rain_path, output, holdout_year, case_delay, rainfall_delay, *, max_horizon=2):
+    horizons = forecast_horizons(max_horizon)
     if not 1 <= case_delay <= 10 or rainfall_delay < 1:
         raise ValueError("Use a case delay of 1–10 months and a rainfall delay of at least one month.")
     cases = read_case_history(case_path)
     rainfall = {key: value if value != "" else np.nan for key, value in read_rainfall(rain_path).items()}
     predictions, coverage = [], []
     with threadpool_limits(limits=4):
-        for horizon in (1, 2):
+        for horizon in horizons:
             frame = prepare_features(cases, rainfall, horizon, case_delay, rainfall_delay)
             for month in range(holdout_year * 12, (holdout_year + 1) * 12):
                 issue = month - horizon
@@ -103,13 +111,14 @@ def evaluate(case_path, rain_path, output, holdout_year, case_delay, rainfall_de
         output_hashes[name] = digest(path)
     write_json(output / "backtest_audit.json", {
         "holdout_year": holdout_year, "case_delay_months": case_delay,
+        "max_horizon_months": max_horizon,
         "rainfall_delay_months": rainfall_delay, "coverage": coverage,
         "cases_sha256": digest(case_path), "rainfall_sha256": digest(rain_path),
         "output_sha256": output_hashes,
         "availability": "Retrospective data with assumed delays, not historical snapshots.",
     })
     print(pd.DataFrame(metrics).to_string(index=False))
-    print(f"Observed targets: {sum(row['observed_targets'] for row in coverage)} across both horizons.")
+    print(f"Observed targets: {sum(row['observed_targets'] for row in coverage)} across {len(horizons)} horizons.")
 
 
 if __name__ == "__main__":
@@ -121,5 +130,7 @@ if __name__ == "__main__":
     parser.add_argument("--holdout-year", type=int, default=2025)
     parser.add_argument("--case-delay", type=int, default=1)
     parser.add_argument("--rainfall-delay", type=int, default=1)
+    parser.add_argument("--max-horizon", type=int, choices=forecast_horizons(MAX_HORIZON), default=2)
     args = parser.parse_args()
-    evaluate(args.cases, args.rainfall, args.output, args.holdout_year, args.case_delay, args.rainfall_delay)
+    evaluate(args.cases, args.rainfall, args.output, args.holdout_year, args.case_delay, args.rainfall_delay,
+             max_horizon=args.max_horizon)

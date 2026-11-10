@@ -345,7 +345,43 @@ def show_nigeria_map(cases, reporting, locations, sidebar_unit, path, demo):
     show_snapshot(history, records, month)
 
 
-def main(*, demo_dir=None, data_dir=DATA):
+def show_forecast_trial(folder, unit):
+    try:
+        audit = json.loads((folder / "forecast_audit.json").read_text(encoding="utf-8"))
+        content = (folder / "forecast_predictions.csv").read_bytes()
+        if hashlib.sha256(content).hexdigest() != audit["forecast_sha256"]:
+            raise ValueError("Forecast CSV differs from the audit.")
+        forecasts = pd.read_csv(io.BytesIO(content), dtype={"org_unit_id": str})
+        selected = forecasts.loc[forecasts["org_unit_id"].eq(unit)].sort_values("horizon_months")
+        options = [months for months in (2, 4, 6) if months <= len(audit["target_months"])]
+        if not options:
+            raise ValueError("Forecast trial must cover at least two months.")
+        issue_date = pd.Timestamp(audit["issue_date"]).strftime("%d %B %Y")
+        case_cutoff = month_label(audit["case_cutoff"])
+        rainfall_cutoff = month_label(audit["rainfall_cutoff"])
+    except (OSError, ValueError, KeyError, TypeError) as error:
+        st.warning(f"Forecast trial could not be loaded. {error}")
+        return
+
+    st.subheader("Forecast trial")
+    st.caption(f"Simulated issue date {issue_date} · Cases through {case_cutoff} · Rainfall through {rainfall_cutoff}")
+    months = st.radio("Forecast window", options, format_func=lambda months: f"Next {months} months", horizontal=True)
+    model = st.selectbox("Forecast model", list(MODELS), index=1, format_func=MODELS.get)
+    visible = selected.loc[selected["horizon_months"].le(months), ["period", model]].rename(
+        columns={model: "Forecast cases"}
+    )
+    if visible["Forecast cases"].isna().all():
+        st.info("This LGA has no estimates for the selected model and months.")
+        return
+    chart = visible.assign(Month=pd.to_datetime(visible["period"])).round({"Forecast cases": 0})
+    st.bar_chart(chart, x="Month", y="Forecast cases")
+    if visible["Forecast cases"].isna().any():
+        st.caption("A blank month indicates that the model lacked a required input.")
+    st.dataframe(visible.assign(period=visible["period"].map(month_label))
+                 .rename(columns={"period": "Month"}).round({"Forecast cases": 0}), hide_index=True)
+
+
+def main(*, demo_dir=None, data_dir=DATA, forecast_dir=None):
     demo = demo_dir is not None
     data_dir = demo_dir if demo else data_dir
     st.set_page_config(page_title="Nigeria Malaria Forecasting", layout="wide")
@@ -377,10 +413,11 @@ def main(*, demo_dir=None, data_dir=DATA):
         all_reporting = table(reporting_path)
     reporting = all_reporting.loc[all_reporting["org_unit_id"].eq(unit)].sort_values("period")
 
-    overview, trends, comparison, nigeria_map, backtest = st.tabs(
-        ["Overview", "Case and rainfall trends", "LGA comparison", "Demo map" if demo else "Nigeria map",
-         "Forecast backtest"]
-    )
+    tabs = ["Overview", "Case and rainfall trends", "LGA comparison", "Demo map" if demo else "Nigeria map",
+            "Forecast backtest"]
+    if forecast_dir is not None:
+        tabs.append("Forecasts")
+    overview, trends, comparison, nigeria_map, backtest, *forecast_tabs = st.tabs(tabs)
     with overview:
         snapshot_month = show_overview(history, reporting)
     with trends:
@@ -462,9 +499,15 @@ def main(*, demo_dir=None, data_dir=DATA):
         st.caption("MAE is the average absolute error in cases per LGA-month. Negative bias means the model "
                    "predicted fewer cases than were reported, on average.")
 
+    if forecast_tabs:
+        with forecast_tabs[0]:
+            show_forecast_trial(forecast_dir, unit)
+
     floating_assistant(location, unit, locations, cases, all_reporting, history.index.tolist(), snapshot_month,
                        (filtered, national, year, horizon, delay), demo)
 
 
 if __name__ == "__main__":
-    main(demo_dir=DEMO_ROOT if os.environ.get("MALARIA_DASHBOARD_DEMO") == "1" else None)
+    forecast_path = os.environ.get("MALARIA_DASHBOARD_FORECAST_DIR")
+    main(demo_dir=DEMO_ROOT if os.environ.get("MALARIA_DASHBOARD_DEMO") == "1" else None,
+         forecast_dir=Path(forecast_path) if forecast_path else None)
