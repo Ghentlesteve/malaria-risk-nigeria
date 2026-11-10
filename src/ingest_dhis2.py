@@ -51,7 +51,8 @@ def case_count(value: str) -> str:
 def load_exports(paths):
     records, lineage, manifest = [], [], []
     identities, seen, years = {}, set(), set()
-    for path in sorted(map(Path, paths)):
+    ordered_paths = sorted(map(Path, paths), key=lambda path: path.name)
+    for path in ordered_paths:
         match = re.fullmatch(r"malaria_confirmed_lga_monthly_([0-9]{4})\.csv", path.name)
         if not match:
             raise ValueError(f"Unexpected input filename: {path.name}")
@@ -66,8 +67,11 @@ def load_exports(paths):
             if len(header) != len(set(header)) or not CORE.issubset(header):
                 raise ValueError(f"Missing or duplicate metadata columns: {path.name}")
             columns = {column: month_period(column, year) for column in header if column not in METADATA}
-            if set(columns.values()) != {f"{year}-{m:02d}" for m in range(1, 13)} or len(columns) != 12:
-                raise ValueError(f"Expected exactly twelve distinct month columns: {path.name}")
+            periods = sorted(columns.values())
+            if not periods or periods != [f"{year:04d}-{m:02d}" for m in range(1, len(periods) + 1)]:
+                raise ValueError(f"Expected distinct consecutive month columns starting in January: {path.name}")
+            if len(periods) != 12 and path != ordered_paths[-1]:
+                raise ValueError(f"Only the latest export may cover a partial year: {path.name}")
             ids = set()
             for number, row in enumerate(reader, 2):
                 if None in row or any(v is None for v in row.values()):
@@ -106,7 +110,7 @@ def load_exports(paths):
         if not source_rows:
             raise ValueError(f"Export has no observations: {path.name}")
         manifest.append({"file": path.name, "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
-                         "year": year, "units": len(ids), "rows": len(source_rows),
+                         "year": year, "periods": periods, "units": len(ids), "rows": len(source_rows),
                          "blank_cases": sum(r["confirmed_cases"] == "" for r in source_rows)})
     if not records:
         raise ValueError("No yearly exports found.")
@@ -124,18 +128,19 @@ def coverage(records, manifest):
     yearly, absent = [], []
     for source in sorted(manifest, key=lambda m: m["year"]):
         year = source["year"]
+        months = len(source["periods"])
         rows = by_year[year]
         ids = {r["org_unit_id"] for r in rows}
         missing_units = sorted(set(roster) - ids)
         for unit in missing_units:
             name, state = roster[unit]
             absent.append({"org_unit_id": unit, "org_unit_name": name, "state": state,
-                           "year": year, "absent_months": 12})
+                           "year": year, "absent_months": months})
         yearly.append({"year": year, "states_or_fct": len({r["state"] for r in rows}),
                        "observed_units": len(ids), "exported_unit_months": len(rows),
                        "blank_case_cells": sum(r["confirmed_cases"] == "" for r in rows),
                        "zero_case_cells": sum(r["confirmed_cases"] == "0" for r in rows),
-                       "absent_unit_months_vs_union_roster": len(missing_units) * 12,
+                       "absent_unit_months_vs_union_roster": len(missing_units) * months,
                        "reported_case_sum": sum(int(r["confirmed_cases"]) for r in rows if r["confirmed_cases"] != "")})
     state_years = []
     for (state, year), rows in sorted(by_state_year.items()):
@@ -157,7 +162,9 @@ def write_readiness_report(path, summary, absent):
     missing = sum(y["absent_unit_months_vs_union_roster"] for y in years)
     roster_size = summary["schema_validation"]["units"]
     zero_count = summary["schema_validation"]["zero_cases"]
-    span = f"January {years[0]['year']}–December {years[-1]['year']}"
+    latest = max(summary["source_files"], key=lambda source: source["year"])
+    last_month = MONTHS[int(latest["periods"][-1][-2:]) - 1]
+    span = f"January {years[0]['year']}–{last_month} {years[-1]['year']}"
     lines = ["# Routine malaria case-data readiness", "",
              f"Nationwide extraction, {span}. Nasarawa was the extraction test.", "",
              f"Prepared at: {summary['prepared_at_utc']}", "",
@@ -190,11 +197,11 @@ def write_readiness_report(path, summary, absent):
               "Indicator UID, age scope and formula history are not embedded in these CSV exports.",
               f"- There are {zero_count} explicit zero case counts in the exports. Confirm whether export settings suppressed zeros before interpreting blank cells. "
               "The pipeline keeps blanks missing and makes no correction without evidence.",
-              "- NHMIS 2019 dataset-level expected, actual and timely report counts are not yet supplied. Reporting quality remains unknown. "
-              "Dataset completion does not prove completion of each malaria field.",
+              "- This case export contains no NHMIS reporting counts. Check the separate NHMIS reporting export for "
+              "completeness and timeliness. Dataset completion does not prove completion of each malaria field.",
               "- Extraction timestamps, historical revision dates and a full independent organisation-unit roster are pending. "
               "A retrospective export does not establish what data was available at a historical forecast issue date.",
-              "- Boundary files and rainfall/temperature data are pending. No rainfall association or forecast performance has been estimated.",
+              "- This report covers the case export. Climate coverage and forecast performance are evaluated separately.",
               "- Reported case totals are not population incidence or an estimate of all malaria infections. "
               "Changes in recorded cases may reflect testing and reporting changes.", "",
               "## Reproduce", "", "```bash", "python -m src.ingest_dhis2", "```", "",
@@ -227,7 +234,7 @@ def prepare(input_dir: Path, output_dir: Path):
                "indicator_formula_user_supplied": DEFINITION,
                "indicator_metadata_embedded_in_exports": False,
                "extraction_timestamp_and_historical_revision_dates": "Not supplied",
-               "reporting_quality": "Unknown; NHMIS 2019 dataset-level report counts not supplied.",
+               "reporting_quality": "Read NHMIS dataset-level report counts from the separate reporting export.",
                "roster_basis": "Union of IDs observed in the supplied files; independent official roster not supplied.",
                "blank_handling": "Retained as blank; absent unit-years listed separately, not fabricated as observations.",
                "source_files": manifest, "coverage": yearly, "schema_validation": validation.to_dict()}

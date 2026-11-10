@@ -17,8 +17,8 @@ class Dhis2IngestionTests(unittest.TestCase):
         self.raw = self.root / "raw"
         self.raw.mkdir()
 
-    def export(self, year, units=("001",), long=False, override=None):
-        headings = [f"{m} {year}" if long else f"{m[:3]}-{year % 100:02d}" for m in MONTHS]
+    def export(self, year, units=("001",), long=False, override=None, months=MONTHS):
+        headings = [f"{m} {year}" if long else f"{m[:3]}-{year % 100:02d}" for m in months]
         fields = ["orgunitlevel1", "orgunitlevel2", "orgunitlevel3", "organisationunitid", *headings]
         path = self.raw / f"malaria_confirmed_lga_monthly_{year}.csv"
         with path.open("w", encoding="utf-8-sig", newline="") as handle:
@@ -69,6 +69,26 @@ class Dhis2IngestionTests(unittest.TestCase):
         path = self.export(2025, units=("001", "001"))
         with self.assertRaisesRegex(ValueError, "Duplicate"):
             load_exports([path])
+
+    def test_latest_partial_year_audits_only_exported_months(self):
+        self.export(2025, units=("001", "002"))
+        self.export(2026, months=MONTHS[:10])
+        output = self.root / "processed"
+        summary = prepare(self.raw, output)
+        coverage = summary["coverage"][-1]
+        self.assertEqual(coverage["exported_unit_months"], 10)
+        self.assertEqual(coverage["absent_unit_months_vs_union_roster"], 10)
+        self.assertEqual(summary["source_files"][-1]["periods"][-1], "2026-10")
+        self.assertIn("October 2026", (output / "readiness_report.md").read_text(encoding="utf-8"))
+
+    def test_missing_month_and_historical_partial_year_are_rejected(self):
+        path = self.export(2025, months=("January", "March"))
+        with self.assertRaisesRegex(ValueError, "consecutive"):
+            load_exports([path])
+        self.export(2025, months=MONTHS[:10])
+        newer = self.export(2026)
+        with self.assertRaisesRegex(ValueError, "Only the latest"):
+            load_exports([path, newer])
 
     def test_identity_changes_and_non_lga_rows_require_review(self):
         a = self.export(2020)

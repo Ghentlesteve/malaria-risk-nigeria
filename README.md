@@ -16,7 +16,7 @@ The exploratory analysis and retrospective backtest address the first two questi
 
 - Existing work: DHS/MIS ingestion, exploratory analysis, figures and a processed state-by-survey-year dataset.
 - New foundation: monthly case-data specification, a CSV template, validator and reproducible DHIS2 export ingestion with provenance and coverage reports.
-- Available locally: yearly routine case exports for 2020–2025, combined into a monthly table with blanks preserved. Run the preparation command below to regenerate the audit.
+- Available locally: routine monthly case exports from January 2020 through October 2026, combined with blanks preserved. Run the preparation command below to regenerate the audit.
 - Available locally: matched LGA polygons, CHIRPS rainfall for 2019–2025, the case–rainfall join, exploratory analysis and a rolling 2025 backtest.
 - The public Streamlit dashboard shows LGA trends, reporting quality and retrospective forecast comparisons. [Open the public dashboard](https://malaria-rain-risk-nigeria.streamlit.app/).
 - Available locally: NHMIS 2019 reporting counts and dashboard rates for 2020–2025.
@@ -69,7 +69,7 @@ python -m src.data_utils path/to/monthly_cases.csv --report data/processed/month
 python -m unittest discover -s tests -v
 ```
 
-The preparation command reads `data/raw/malaria_confirmed_lga_monthly_YYYY.csv` and writes derived files to `data/processed/routine/`: a monthly case table, source-cell lineage, source fingerprints and schema results, yearly/state coverage, absent unit-years and a readable readiness report. Raw files are unchanged. Original names and hierarchy prefixes are retained. Reporting measures stay blank until supplied. The importer accepts the observed wide monthly export layouts, checks all twelve month headings against the filename year, and accepts decimal-formatted whole counts without rounding. Unsupported layouts or ambiguous identities fail for review.
+The preparation command reads `data/raw/malaria_confirmed_lga_monthly_YYYY.csv` and writes derived files to `data/processed/routine/`: a monthly case table, source-cell lineage, source fingerprints and schema results, yearly/state coverage, absent unit-years and a readable readiness report. Raw files are unchanged. Original names and hierarchy prefixes are retained. Reporting measures stay blank until supplied. The importer checks month headings against the filename year and accepts decimal-formatted whole counts without rounding. The latest export may end before December if it contains every month from January through its final month. Earlier exports must cover all twelve months.
 
 For manually prepared inputs, `templates/monthly_cases.csv` documents the validator's expected format. It is deliberately header-only and fails the empty-data check.
 

@@ -4,7 +4,7 @@
 
 One row per organisation unit per calendar month, with a single agreed definition of confirmed malaria cases. The agreed scope is nationwide LGA data across all 36 states and the FCT. Never mix state totals and their LGAs in one modeling series or silently combine different case definitions.
 
-Nasarawa was the extraction test, not a selected pilot. The header-only template in `templates/monthly_cases.csv` contains no observations. Routine exports for 2020–2025 are now available locally.
+Nasarawa was the initial extraction test. The local routine exports span January 2020 through October 2026. The template in `templates/monthly_cases.csv` contains only column headers.
 
 ## CSV fields
 
