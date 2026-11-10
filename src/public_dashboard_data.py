@@ -1,5 +1,6 @@
 """Package only the data used by the public dashboard."""
 
+import argparse
 import csv
 import io
 import json
@@ -11,6 +12,14 @@ ROOT = Path(__file__).resolve().parents[1]
 ASSET_NAME = "malaria-dashboard-data-2020-2025.zip"
 RELEASE_TAG = "dashboard-data-2020-2025-v1"
 RELEASE_URL = f"https://github.com/Ghentlesteve/malaria-risk-nigeria/releases/download/{RELEASE_TAG}/{ASSET_NAME}"
+FORECAST_RELEASE_TAG = "forecast-trial-2026-10-v1"
+FORECAST_ASSET_NAME = "malaria-forecast-trial-2026-10.zip"
+FORECAST_RELEASE_URL = (
+    f"https://github.com/Ghentlesteve/malaria-risk-nigeria/releases/download/{FORECAST_RELEASE_TAG}/{FORECAST_ASSET_NAME}"
+)
+FORECAST_PREDICTIONS = "forecast_predictions.csv"
+FORECAST_AUDIT = "forecast_audit.json"
+FORECAST_MEMBERS = {FORECAST_PREDICTIONS, FORECAST_AUDIT}
 CASES = "features/case_rainfall_monthly.csv"
 REPORTING = "routine/nhmis_reporting_monthly.csv"
 BOUNDARIES = "climate/nigeria_lga_boundaries_ocha_matched.geojson"
@@ -63,24 +72,51 @@ def bundle_files(data):
         yield f"{run}/{AUDIT}", json.dumps(public_audit).encode("utf-8")
 
 
-def write_bundle(data, output):
-    files = dict(bundle_files(data))
+def write_zip(output, files):
     output.parent.mkdir(parents=True, exist_ok=True)
     with ZipFile(output, "w") as archive:
         for name, content in files.items():
             archive.writestr(ZipInfo(name), content, compress_type=ZIP_DEFLATED)
 
 
-def unpack_bundle(payload, destination):
+def write_bundle(data, output):
+    write_zip(output, dict(bundle_files(data)))
+
+
+def write_forecast_bundle(data, output):
+    audit = json.loads((data / FORECAST_AUDIT).read_text(encoding="utf-8"))
+    original = (data / FORECAST_PREDICTIONS).read_bytes()
+    if sha256(original).hexdigest() != audit["forecast_sha256"]:
+        raise ValueError("Forecast predictions differ from the run audit.")
+    predictions = select_columns(original, (
+        "org_unit_id", "issue_month", "period", "horizon_months",
+        "seasonal_naive", "case_history", "case_rainfall", "rainfall_model_status",
+    ))
+    public_audit = {key: audit[key] for key in (
+        "issue_date", "target_months", "case_cutoff", "rainfall_cutoff", "case_delay_months", "rainfall_delay_months",
+        "rows", "rainfall_model_status_counts", "availability",
+    )}
+    public_audit["forecast_sha256"] = sha256(predictions).hexdigest()
+    write_zip(output, {FORECAST_PREDICTIONS: predictions, FORECAST_AUDIT: json.dumps(public_audit).encode("utf-8")})
+
+
+def unpack_bundle(payload, destination, members=MEMBERS):
     with ZipFile(io.BytesIO(payload)) as archive:
         names = archive.namelist()
-        if len(names) != len(MEMBERS) or set(names) != MEMBERS:
+        if len(names) != len(members) or set(names) != members:
             raise ValueError("The dashboard archive must contain exactly the expected files.")
-        archive.extractall(destination, sorted(MEMBERS))
+        archive.extractall(destination, sorted(members))
 
 
 if __name__ == "__main__":
-    bundle = ROOT / "outputs" / ASSET_NAME
-    write_bundle(ROOT / "data" / "processed", bundle)
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--forecast-dir", type=Path, help="Package only the results and audit for this forecast run.")
+    args = parser.parse_args()
+    if args.forecast_dir is None:
+        bundle = ROOT / "outputs" / ASSET_NAME
+        write_bundle(ROOT / "data" / "processed", bundle)
+    else:
+        bundle = ROOT / "outputs" / FORECAST_ASSET_NAME
+        write_forecast_bundle(args.forecast_dir, bundle)
     print(bundle)
     print(f"SHA-256 {sha256(bundle.read_bytes()).hexdigest()}")

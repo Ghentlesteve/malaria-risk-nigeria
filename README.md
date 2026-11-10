@@ -133,6 +133,14 @@ Attach the verified archive to a [GitHub release](https://github.com/Ghentlestev
 
 The public startup check uses the published ZIP and verifies that the app loads the map, case counts and both backtest delay settings. Run it locally with `python -m unittest discover -s tests -p smoke_public_dashboard.py -v`.
 
+To publish the October 2026 forecast trial, generate its separate archive.
+
+```powershell
+python -m src.public_dashboard_data --forecast-dir data/processed/forecast_runs/2026-10-trial-6mo
+```
+
+Attach `outputs/malaria-forecast-trial-2026-10.zip` to a GitHub release tagged `forecast-trial-2026-10-v1`. The public app shows the **Forecasts** tab once it downloads the verified archive. The tab displays the simulated issue date and the case and rainfall cutoffs. Allow up to five minutes for the app to check again after a release appears.
+
 ## Ask the dashboard
 
 The dashboard opens on **Overview**. Choose an LGA and a snapshot month to see reported cases, rainfall, and NHMIS reporting rates for the same period. The snapshot starts on the latest month with a reported case count when one is available.
