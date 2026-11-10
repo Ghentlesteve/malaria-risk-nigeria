@@ -1,0 +1,101 @@
+name: Run malaria forecast
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/forecast-run.yml"
+      - "requirements-forecast.txt"
+      - "src/**"
+      - "tests/smoke_forecast_job.py"
+  workflow_dispatch:
+    inputs:
+      issue_month:
+        description: "Issue month (YYYY-MM). Leave blank to test with synthetic inputs."
+        type: string
+      share_results:
+        description: "Make forecast outputs downloadable by repository readers. Enable only for approved outputs."
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    if: github.event_name == 'push' || inputs.issue_month == ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-forecast.txt
+      - run: python -m pip install -r requirements-forecast.txt
+      - run: python -m unittest discover -s tests -p smoke_forecast_job.py -v
+
+  forecast:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.issue_month != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: forecast-inputs
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-forecast.txt
+      - run: python -m pip install -r requirements-forecast.txt
+      - name: Download the prepared inputs
+        env:
+          FORECAST_CASES_URL: ${{ secrets.FORECAST_CASES_URL }}
+          FORECAST_RAINFALL_URL: ${{ secrets.FORECAST_RAINFALL_URL }}
+          FORECAST_RAINFALL_UPDATE_URL: ${{ secrets.FORECAST_RAINFALL_UPDATE_URL }}
+        run: |
+          download_input() {
+            if [[ "$1" != https://* ]] ||
+              ! curl --silent --fail --location --proto '=https' --proto-redir '=https' \
+                --max-time 120 --max-filesize 25000000 --output "$2" -- "$1"; then
+              echo "::error::Could not download $3. Check the forecast-inputs environment secrets."
+              return 1
+            fi
+          }
+          mkdir -p "$RUNNER_TEMP/forecast-inputs"
+          download_input "$FORECAST_CASES_URL" "$RUNNER_TEMP/forecast-inputs/cases.csv" "case history"
+          download_input "$FORECAST_RAINFALL_URL" "$RUNNER_TEMP/forecast-inputs/rainfall.csv" "rainfall history"
+          if [[ -n "$FORECAST_RAINFALL_UPDATE_URL" ]]; then
+            download_input "$FORECAST_RAINFALL_UPDATE_URL" "$RUNNER_TEMP/forecast-inputs/rainfall_update.csv" "rainfall update"
+          fi
+      - name: Run the six-month forecast
+        env:
+          ISSUE_MONTH: ${{ inputs.issue_month }}
+        run: |
+          input_dir="$RUNNER_TEMP/forecast-inputs"
+          rainfall=(--rainfall "$input_dir/rainfall.csv")
+          if [[ -f "$input_dir/rainfall_update.csv" ]]; then
+            rainfall+=(--rainfall "$input_dir/rainfall_update.csv")
+          fi
+          if ! python -m src.forecast --issue-month="$ISSUE_MONTH" --max-horizon 6 \
+            --cases "$input_dir/cases.csv" "${rainfall[@]}" --output outputs/forecast-hosted \
+            > "$RUNNER_TEMP/forecast-run.log" 2>&1; then
+            echo "::error::Forecast failed. Verify the issue month, input schema, and coverage through the required cutoffs."
+            exit 1
+          fi
+          cat "$RUNNER_TEMP/forecast-run.log"
+      - name: Upload approved forecast outputs
+        if: inputs.share_results
+        uses: actions/upload-artifact@v7
+        with:
+          name: forecast-${{ inputs.issue_month }}
+          path: |
+            outputs/forecast-hosted/forecast_predictions.csv
+            outputs/forecast-hosted/forecast_audit.json
+          if-no-files-found: error
+          retention-days: 7

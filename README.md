@@ -141,6 +141,14 @@ python -m src.public_dashboard_data --forecast-dir data/processed/forecast_runs/
 
 Attach `outputs/malaria-forecast-trial-2026-10.zip` to a GitHub release tagged `forecast-trial-2026-10-v1`. The public app shows the **Forecasts** tab once it downloads the verified archive. The tab displays the simulated issue date and the case and rainfall cutoffs. Allow up to five minutes for the app to check again after a release appears.
 
+## Run a forecast on GitHub
+
+Open **Actions → Run malaria forecast → Run workflow**. Leave the issue month blank to run the synthetic checks. For a run with real inputs, select `main` and enter the month of issue in `YYYY-MM` format. The job generates six monthly estimates for each LGA and requires cases and rainfall through the preceding month.
+
+Before running with real inputs, create a GitHub environment named `forecast-inputs` and restrict it to the `main` branch. Set its `FORECAST_CASES_URL` and `FORECAST_RAINFALL_URL` secrets to direct HTTPS download links from approved storage for the prepared case and rainfall CSVs. If recent rainfall is in a separate file, set `FORECAST_RAINFALL_UPDATE_URL` as well. Rainfall files must cover distinct LGA-month keys.
+
+By default the job reports completion without retaining the result. Enable **Make forecast outputs downloadable by repository readers** only for results approved for that audience. That option retains the forecast CSV and audit for seven days. Publication to the dashboard still uses the reviewed release archive. A monthly schedule depends on having a source that the runner can access as new inputs arrive.
+
 ## Ask the dashboard
 
 The dashboard opens on **Overview**. Choose an LGA and a snapshot month to see reported cases, rainfall, and NHMIS reporting rates for the same period. The snapshot starts on the latest month with a reported case count when one is available.
