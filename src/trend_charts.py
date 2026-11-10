@@ -38,6 +38,19 @@ def timeline_chart(data):
     return _monthly_timeline(data, data, dict.fromkeys(METRICS, tooltip))
 
 
+def forecast_trial_chart(data):
+    return (
+        alt.Chart(data)
+        .mark_line(point=True, invalid="break-paths-show-path-domains")
+        .encode(
+            x=alt.X("Month:O", sort=data["Month"].tolist(), axis=alt.Axis(labelAngle=0), title=None),
+            y=alt.Y("Forecast cases:Q", scale=alt.Scale(zero=True)),
+            tooltip=[alt.Tooltip("Month:N"), alt.Tooltip("Forecast cases:Q", format=",.0f")],
+        )
+        .properties(description="Monthly forecast trial estimates")
+    )
+
+
 def comparison_chart(first, second, first_name, second_name):
     """Overlay two LGAs using one time and value scale per measure."""
     labels = [first_name, second_name]

@@ -15,7 +15,7 @@ from src.guided_questions import (
     compare_answer, forecast_answer, latest_snapshot_month, month_label, report_detail, series_answer, snapshot_metrics,
 )
 from src.nigeria_map import MAP_METRICS, load_map_boundaries, map_values, nigeria_map_chart
-from src.trend_charts import comparison_chart, monthly_chart_data, seasonal_chart, timeline_chart
+from src.trend_charts import comparison_chart, forecast_trial_chart, monthly_chart_data, seasonal_chart, timeline_chart
 
 DATA = Path(__file__).resolve().parents[1] / "data" / "processed"
 MODELS = {
@@ -373,12 +373,12 @@ def show_forecast_trial(folder, unit):
     if visible["Forecast cases"].isna().all():
         st.info("This LGA has no estimates for the selected model and months.")
         return
-    chart = visible.assign(Month=pd.to_datetime(visible["period"])).round({"Forecast cases": 0})
-    st.bar_chart(chart, x="Month", y="Forecast cases")
+    visible = (visible.assign(period=visible["period"].map(month_label))
+               .rename(columns={"period": "Month"}).round({"Forecast cases": 0}))
+    st.altair_chart(forecast_trial_chart(visible), width="stretch")
     if visible["Forecast cases"].isna().any():
-        st.caption("A blank month indicates that the model lacked a required input.")
-    st.dataframe(visible.assign(period=visible["period"].map(month_label))
-                 .rename(columns={"period": "Month"}).round({"Forecast cases": 0}), hide_index=True)
+        st.caption("A gap indicates that the model lacked a required input for that month.")
+    st.dataframe(visible, hide_index=True)
 
 
 def main(*, demo_dir=None, data_dir=DATA, forecast_dir=None):
